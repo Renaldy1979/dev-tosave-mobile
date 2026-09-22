@@ -7,8 +7,10 @@ Em caso de dúvida, pergunte ao Orquestrador: `maestri ask "Claude Code" "..."`.
 
 | Projeto | Pasta | O que é | Situação |
 |---|---|---|---|
-| **01 — App mobile** | `Projetos\app-mobile-tosave` | App do **colecionador**, em Expo | **Fase atual** |
-| **02 — Portal web ADM** | `Projetos\colecao-miniaturas-web` | Painel administrativo + API que servirá o app | **Pausado**, começa na fase 2 |
+| **01 — App mobile** | `C:\Dev\tosave-mobile` | App do **colecionador**, em Expo | **Fase atual** |
+| **02 — Portal web ADM** | `...\OneDrive\Documents\Projetos\colecao-miniaturas-web` | Painel administrativo + API que servirá o app | **Pausado**, começa na fase 2 |
+
+> O app mobile foi movido do OneDrive para `C:\Dev\tosave-mobile` em 22/09/2026: a sincronização do OneDrive corrompeu pacotes dentro de `node_modules` durante o install. O portal web ainda está no OneDrive e deve ser movido quando a fase 2 começar.
 
 O portal web já tem um esqueleto Next.js com schema do banco e o design system completo. **Ninguém mexe nele nesta fase.**
 Administração (CRUD de carros, séries, marcas, atributos, usuários, settings) é assunto do portal, **nunca do app**.
