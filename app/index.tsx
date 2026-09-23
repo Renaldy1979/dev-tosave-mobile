@@ -24,9 +24,11 @@ import { readOnboardingSeen } from "@/utils/onboarding";
  * resolver, escala 1 → 1.04 e faz fade out da logo + barra (250 ms)
  * antes do `router.replace` para o destino.
  *
- * Destino:
- * - `onboarding.seen` ausente → `/onboarding`.
- * - demais casos → `/(tabs)` (com ou sem sessão; o app é público).
+ * Destino (fase 2 — app travado):
+ * - 1ª abertura (`onboarding.seen` ausente) → `/onboarding`. Após o
+ *   onboarding, o usuário cai em `/login` se não estiver logado.
+ * - sem sessão → `/login` (tela cheia, não modal).
+ * - com sessão → `/(tabs)`.
  *
  * Erro ao ler storage: trata como "sem onboarding visto" / "sem
  * sessão" e segue para o destino (spec §1.3).
@@ -53,18 +55,31 @@ export default function Index() {
       ]);
 
       // Defesa contra flag stale: confirma com o service.
+      let effectiveSession = hasSession;
       if (hasSession) {
         try {
           const user = await getCurrentUser();
           if (!user && !cancelled) {
             await AsyncStorage.removeItem("tosave.session").catch(() => undefined);
+            effectiveSession = false;
           }
         } catch {
           // ignora — a navegação prossegue
         }
       }
       if (cancelled) return;
-      const dest = seen ? "/(tabs)" : "/onboarding";
+
+      // Fase 2: app travado. Sem sessão não se entra nas tabs — vai
+      // para o `/login` (tela cheia). O onboarding continua só na 1ª
+      // abertura (antes do login).
+      let dest: "/onboarding" | "/login" | "/(tabs)";
+      if (!seen) {
+        dest = "/onboarding";
+      } else if (!effectiveSession) {
+        dest = "/login";
+      } else {
+        dest = "/(tabs)";
+      }
 
       // Fade out da logo + barra (250 ms), escala 1 → 1.04, depois navega.
       // Movimento reduzido: fade simples de 200 ms sem escala.

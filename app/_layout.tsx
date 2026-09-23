@@ -1,10 +1,10 @@
 import "./global.css";
 
-import { useCallback, useEffect } from "react";
+import { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
-import { Stack, useRouter } from "expo-router";
+import { Stack, useRouter, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import {
   useFonts,
@@ -23,6 +23,7 @@ import * as SplashScreen from "expo-splash-screen";
 import { ThemeProvider } from "@/theme/ThemeProvider";
 import { ToastProvider } from "@/components/ui/Toast";
 import { CollectionProvider } from "@/hooks/useCollectionStore";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
@@ -44,23 +45,6 @@ export default function RootLayout() {
     if (fontsLoaded) SplashScreen.hideAsync().catch(() => undefined);
   }, [fontsLoaded]);
 
-  // O `CollectionProvider` precisa abrir o modal de login quando o
-  // usuário tenta favoritar sem sessão. Como ele está num nível acima
-  // do Stack (e portanto acima do router no nível de hooks), envolvemos
-  // num componente interno que recebe o `useRouter`.
-  const router = useRouter();
-  const requireSession = useCallback(
-    (intent?: { carId?: string }) => {
-      router.push({
-        pathname: "/login",
-        params: intent?.carId
-          ? { intent: "add", carId: intent.carId }
-          : undefined,
-      });
-    },
-    [router]
-  );
-
   if (!fontsLoaded) return null;
 
   return (
@@ -69,9 +53,7 @@ export default function RootLayout() {
         <ThemeProvider>
           <BottomSheetModalProvider>
             <ToastProvider>
-              <CollectionProvider
-                onRequireSession={() => requireSession()}
-              >
+              <CollectionProvider>
                 <StatusBar style="light" />
                 <Stack screenOptions={{ headerShown: false }}>
                   <Stack.Screen name="index" />
@@ -79,10 +61,12 @@ export default function RootLayout() {
                   <Stack.Screen
                     name="login"
                     options={{
-                      presentation: "modal",
-                      animation: "slide_from_bottom",
+                      // Fase 2: tela cheia, não modal.
+                      presentation: "fullScreenModal",
+                      animation: "fade",
                     }}
                   />
+                  <Stack.Screen name="cadastro" options={{ presentation: "fullScreenModal", animation: "fade" }} />
                   <Stack.Screen name="(tabs)" />
                   <Stack.Screen
                     name="car/[id]"
@@ -93,6 +77,7 @@ export default function RootLayout() {
                     }}
                   />
                 </Stack>
+                <AuthGate />
               </CollectionProvider>
             </ToastProvider>
           </BottomSheetModalProvider>
@@ -100,4 +85,31 @@ export default function RootLayout() {
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
+}
+
+/**
+ * AuthGate — redireciona para `/login` quando a sessão cai enquanto
+ * o usuário está numa rota protegida (tabs ou car/[id]). O splash
+ * (`app/index.tsx`) já cuida da entrada inicial; o cadasto
+ * (`/cadastro`) também fica acessível sem sessão.
+ */
+function AuthGate() {
+  const router = useRouter();
+  const segments = useSegments();
+  const { user } = useCurrentUser();
+
+  useEffect(() => {
+    if (user) return;
+    const top = segments[0];
+    // Rotas que exigem sessão: tabs e detalhe do carro. `/login`,
+    // `/cadastro`, `/onboarding` e `/` (splash) ficam acessíveis
+    // sem sessão para que o usuário possa entrar ou criar conta.
+    const protectedRoute =
+      top === "(tabs)" || top === "car";
+    if (protectedRoute) {
+      router.replace("/login");
+    }
+  }, [user, segments, router]);
+
+  return null;
 }

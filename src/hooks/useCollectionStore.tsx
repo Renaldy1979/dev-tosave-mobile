@@ -30,8 +30,9 @@ import type { Car, CollectionItemWithCar, CollectionSummary } from "@/types";
  *
  * Ações otimistas (`add`, `remove`, `setQuantity`, `toggle`) atualizam o
  * store e revalidam com o service. Quando chamadas sem user (visitante),
- * disparam `onRequireSession` (injetado pelo Provider) em vez de sair
- * em silêncio — pede o login modal e continua a ação pendente depois.
+ * disparam erro explícito em vez de sair em silêncio — a fase 2
+ * trava o app atrás do login, então ações sem user só acontecem em
+ * bug.
  */
 type CollectionState = {
   /** Mapa `carId → quantity` (0 quando não está na coleção). */
@@ -55,11 +56,7 @@ type CollectionActions = {
   refresh: () => Promise<void>;
 };
 
-type CollectionContextValue = CollectionState &
-  CollectionActions & {
-    /** Pede login modal ao consumidor quando uma ação exigir sessão. */
-    onRequireSession?: () => void;
-  };
+type CollectionContextValue = CollectionState & CollectionActions;
 
 const emptySummary: CollectionSummary = { totalItems: 0, totalModels: 0, duplicates: 0 };
 
@@ -67,11 +64,9 @@ const CollectionContext = createContext<CollectionContextValue | null>(null);
 
 export type CollectionProviderProps = {
   children: ReactNode;
-  /** Callback para abrir o login modal quando uma ação precisar de sessão. */
-  onRequireSession?: () => void;
 };
 
-export function CollectionProvider({ children, onRequireSession }: CollectionProviderProps) {
+export function CollectionProvider({ children }: CollectionProviderProps) {
   const { user } = useCurrentUser();
   const [items, setItems] = useState<Record<string, number>>({});
   const [carsById, setCarsById] = useState<Record<string, Car>>({});
@@ -125,9 +120,9 @@ export function CollectionProvider({ children, onRequireSession }: CollectionPro
 
   const toggle = useCallback(
     async (carId: string) => {
+      // App travado (fase 2): sem user nunca chegamos aqui.
       if (!user) {
-        onRequireSession?.();
-        return;
+        throw new Error("collection_toggle_failed");
       }
       const previous = items[carId] ?? 0;
       const next = previous > 0 ? 0 : 1;
@@ -157,14 +152,14 @@ export function CollectionProvider({ children, onRequireSession }: CollectionPro
         throw new Error("collection_toggle_failed");
       }
     },
-    [user, items, recomputeSummary, onRequireSession]
+    [user, items, recomputeSummary]
   );
 
   const setQuantityAction = useCallback(
     async (carId: string, quantity: number) => {
+      // App travado (fase 2): sem user nunca chegamos aqui.
       if (!user) {
-        onRequireSession?.();
-        return;
+        throw new Error("collection_set_failed");
       }
       const previous = items[carId] ?? 0;
       setItems((cur) => {
@@ -189,14 +184,14 @@ export function CollectionProvider({ children, onRequireSession }: CollectionPro
         throw new Error("collection_set_failed");
       }
     },
-    [user, items, recomputeSummary, onRequireSession]
+    [user, items, recomputeSummary]
   );
 
   const removeAction = useCallback(
     async (carId: string) => {
+      // App travado (fase 2): sem user nunca chegamos aqui.
       if (!user) {
-        onRequireSession?.();
-        return;
+        throw new Error("collection_remove_failed");
       }
       const previous = items[carId] ?? 0;
       setItems((cur) => {
@@ -219,7 +214,7 @@ export function CollectionProvider({ children, onRequireSession }: CollectionPro
         throw new Error("collection_remove_failed");
       }
     },
-    [user, items, recomputeSummary, onRequireSession]
+    [user, items, recomputeSummary]
   );
 
   const value = useMemo<CollectionContextValue>(
@@ -233,7 +228,6 @@ export function CollectionProvider({ children, onRequireSession }: CollectionPro
       setQuantity: setQuantityAction,
       remove: removeAction,
       refresh,
-      onRequireSession,
     }),
     [
       items,
@@ -245,7 +239,6 @@ export function CollectionProvider({ children, onRequireSession }: CollectionPro
       setQuantityAction,
       removeAction,
       refresh,
-      onRequireSession,
     ]
   );
 
@@ -256,14 +249,6 @@ export function useCollectionStore() {
   const ctx = useContext(CollectionContext);
   if (!ctx) throw new Error("useCollectionStore precisa estar dentro de <CollectionProvider>.");
   return ctx;
-}
-
-/**
- * Helper para a TabBar e outros consumidores que só precisam do total.
- */
-export function useCollectionCount(): number {
-  const { summary } = useCollectionStore();
-  return summary.totalItems;
 }
 
 /**

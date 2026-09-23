@@ -16,7 +16,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/theme/ThemeProvider";
-import { useCurrentUser } from "@/hooks/useCurrentUser";
+// useCurrentUser removido da Busca na fase 2 (app travado).
 import { useDelayedFlag } from "@/hooks/useDelayedFlag";
 import { useGridColumns } from "@/hooks/useGridColumns";
 import { useCollectionStore } from "@/hooks/useCollectionStore";
@@ -47,7 +47,7 @@ import { CarCard } from "@/components/car/CarCard";
 import { CarGridSkeleton, CarCardSkeleton } from "@/components/car/CarCardSkeleton";
 import { FilterChipsRow } from "@/components/ui/FilterChipsRow";
 import { FilterSheet, type FilterDraft } from "@/components/ui/FilterSheet";
-import { useRequireSession } from "@/hooks/useRequireSession";
+// useRequireSession removido na fase 2 (app travado).
 import { useToast } from "@/components/ui/Toast";
 
 const PAGE_SIZE = 20;
@@ -76,8 +76,8 @@ export default function Busca() {
   }>();
   const insets = useSafeAreaInsets();
   const { c } = useTheme();
-  const { user } = useCurrentUser();
-  const requireSession = useRequireSession();
+  // `user` não é checado aqui — a Busca fica dentro do grupo (tabs),
+  // protegido pelo Stack, então user está sempre presente.
   const { show } = useToast();
   const columns = useGridColumns();
 
@@ -316,10 +316,6 @@ export default function Busca() {
 
   const handleToggleCollection = useCallback(
     async (car: CarListItem) => {
-      if (!user) {
-        requireSession({ intent: "add", carId: car.id });
-        return;
-      }
       try {
         await collection.toggle(car.id);
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
@@ -327,7 +323,7 @@ export default function Busca() {
         show({ type: "danger", message: "Não foi possível atualizar sua coleção." });
       }
     },
-    [user, collection, requireSession, show]
+    [collection, show]
   );
 
   // ----- Chips para FilterChipsRow -----

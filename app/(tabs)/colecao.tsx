@@ -34,7 +34,7 @@ import { BottomSheet, SheetPressable } from "@/components/ui/BottomSheet";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { ListRow } from "@/components/ui/ListRow";
 import { useToast } from "@/components/ui/Toast";
-import { LoginGate } from "@/components/ui/LoginGate";
+// LoginGate removido na fase 2 — app travado.
 import { shareCar } from "@/components/ui/ShareWhatsAppButton";
 
 type SortOption = "recent" | "name" | "year" | "units";
@@ -244,20 +244,10 @@ export default function Colecao() {
     scrollY.value = event.contentOffset.y;
   });
 
-  // LoginGate: só renderiza quando o store ainda não tem dados e não
-  // há usuário — evita flash de "você não está logado" enquanto o
-  // bootstrap carrega.
+  // Fase 2: app travado — sem sessão nunca chegamos aqui. O `_layout`
+  // raiz redireciona para `/login` quando a sessão cai.
   if (!user) {
-    return (
-      <ScreenContainer bg="bg" edges={["bottom"]} className="bg-bg">
-        <Header variant="large" title="Minha coleção" scrollY={scrollY} />
-        <LoginGate
-          title="Entre para ver sua coleção"
-          description="Suas miniaturas ficam salvas na sua conta."
-          next="/colecao"
-        />
-      </ScreenContainer>
-    );
+    return null;
   }
 
   const subTitle =

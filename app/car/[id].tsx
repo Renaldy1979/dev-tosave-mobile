@@ -18,7 +18,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/theme/ThemeProvider";
-import { useCurrentUser } from "@/hooks/useCurrentUser";
+// useCurrentUser removido na fase 2.
 import { useDelayedFlag } from "@/hooks/useDelayedFlag";
 import { useCollectionStore } from "@/hooks/useCollectionStore";
 import {
@@ -59,7 +59,9 @@ export default function CarDetalhe() {
   const id = params.id ?? "";
   const insets = useSafeAreaInsets();
   const { c } = useTheme();
-  const { user } = useCurrentUser();
+  // App travado na fase 2 — sem sessão nunca chegamos aqui. A sessão
+  // é checada no nível do `_layout` raiz.
+  // useCurrentUser removido: nada aqui depende mais de `user`.
   const { show } = useToast();
 
   const [detail, setDetail] = useState<CarDetail | null>(null);
@@ -301,8 +303,8 @@ export default function CarDetalhe() {
           </View>
         </View>
 
-        {/* CollectionPanel */}
-        {user && inCollection ? (
+        {/* CollectionPanel — app travado, sempre logado. */}
+        {inCollection ? (
           <CollectionPanel
             visible
             quantity={quantity}
@@ -529,7 +531,7 @@ export default function CarDetalhe() {
               </Button>
             ) : (
               <Button
-                label={user ? "Adicionar à coleção" : "Entrar para adicionar"}
+                label="Adicionar à coleção"
                 variant="primary"
                 size="lg"
                 fullWidth

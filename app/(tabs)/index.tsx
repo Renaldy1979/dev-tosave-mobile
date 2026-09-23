@@ -11,7 +11,6 @@ import type { CarListItem, Serie } from "@/types";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useDelayedFlag } from "@/hooks/useDelayedFlag";
 import { useGridColumns } from "@/hooks/useGridColumns";
-import { useRequireSession } from "@/hooks/useRequireSession";
 import { useCollectionStore } from "@/hooks/useCollectionStore";
 import { ScreenContainer } from "@/components/ui/ScreenContainer";
 import { ThemeScope } from "@/components/ui/ThemeScope";
@@ -45,7 +44,6 @@ type GridState = "loading" | "ok" | "error" | "empty" | "loadingMore";
 export default function Home() {
   const router = useRouter();
   const { user, refresh: refreshUser } = useCurrentUser();
-  const requireSession = useRequireSession();
   const collection = useCollectionStore();
   const { show } = useToast();
   const columns = useGridColumns();
@@ -133,10 +131,6 @@ export default function Home() {
 
   const handleToggleCollection = useCallback(
     async (car: CarListItem) => {
-      if (!user) {
-        requireSession({ intent: "add", carId: car.id });
-        return;
-      }
       const wasIn = (collection.items[car.id] ?? 0) > 0;
       const currentQty = collection.items[car.id] ?? 0;
       // Se vai remover e quantity > 1, pede confirmação antes.
@@ -161,7 +155,7 @@ export default function Home() {
         show({ type: "danger", message: "Não foi possível atualizar sua coleção." });
       }
     },
-    [user, collection, requireSession, show, router]
+    [collection, show, router]
   );
 
   const handleConfirmRemoveAll = useCallback(async () => {

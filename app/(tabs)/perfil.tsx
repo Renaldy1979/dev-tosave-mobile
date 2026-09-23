@@ -38,7 +38,7 @@ import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Dialog } from "@/components/ui/Dialog";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { ProfileSkeleton } from "@/components/car/CarCardSkeleton";
-import { LoginGate } from "@/components/ui/LoginGate";
+// LoginGate removido na fase 2 — app travado.
 import { useToast } from "@/components/ui/Toast";
 import { clearOnboardingSeen } from "@/utils/onboarding";
 
@@ -116,17 +116,10 @@ export default function Perfil() {
     scrollY.value = event.contentOffset.y;
   });
 
+  // Fase 2: app travado — sem sessão nunca chegamos aqui. O `_layout`
+  // raiz redireciona para `/login` quando a sessão cai.
   if (!user) {
-    return (
-      <ScreenContainer bg="bg" edges={["bottom"]} className="bg-bg">
-        <Header variant="large" title="Perfil" scrollY={scrollY} />
-        <LoginGate
-          title="Entre para acessar sua conta"
-          description="Suas miniaturas e preferências ficam salvas na sua conta."
-          next="/perfil"
-        />
-      </ScreenContainer>
-    );
+    return null;
   }
 
   if (userState === "error") {

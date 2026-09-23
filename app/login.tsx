@@ -16,7 +16,7 @@ import { useTheme } from "@/theme/ThemeProvider";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useCollectionStore } from "@/hooks/useCollectionStore";
 import { addToCollection, getCollectionQuantity } from "@/services/collection";
-import { getDemoCredentials } from "@/services/auth";
+// `getDemoCredentials` removido na fase 2 (não há mais dados de exemplo).
 import { LogoCar } from "@/components/ui/Logo";
 import { ScreenContainer } from "@/components/ui/ScreenContainer";
 import { Text } from "@/components/ui/Text";
@@ -186,15 +186,6 @@ export default function Login() {
     show,
   ]);
 
-  const handleFillDemo = useCallback(async () => {
-    const demo = await getDemoCredentials();
-    setEmail(demo.email);
-    setPassword(demo.password);
-    setEmailError(null);
-    setPasswordError(null);
-    setBanner(null);
-  }, []);
-
   const copy = COPY[variant];
 
   return (
@@ -341,21 +332,21 @@ export default function Login() {
             className="mt-6"
           />
 
-          {/* dados de exemplo — sempre na fase 1 (decisão do Orquestrador) */}
+          {/* Link "Criar conta" — fase 2, app travado. */}
           <View className="mt-6 items-center">
-            <Text variant="caption" tone="ink" className="text-ink-fg/50 text-center">
-              Ambiente de demonstração:{`\n`}use os dados de exemplo.
+            <Text variant="caption" tone="ink" className="text-ink-fg/60 text-center">
+              Ainda não tem conta?
             </Text>
             <Pressable
               accessibilityRole="link"
-              accessibilityLabel="Preencher dados de exemplo"
-              onPress={handleFillDemo}
+              accessibilityLabel="Criar conta"
+              onPress={() => router.push("/cadastro")}
               hitSlop={12}
               className="mt-2 active:opacity-70"
               style={{ minHeight: 44, justifyContent: "center" }}
             >
               <Text variant="body-sm" tone="primary" className="font-sans-medium">
-                Preencher dados de exemplo
+                Criar conta
               </Text>
             </Pressable>
           </View>
