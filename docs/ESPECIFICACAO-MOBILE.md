@@ -30,6 +30,7 @@ A fase 1 está entregue (tag `v0.1.0-fase1`). A fase 2 vem **antes** do portal w
   3. com sessão, entra nas tabs.
 
   O colecionador cria a conta **pelo app**, num cadastro simples: nome, e-mail e senha. Foto e demais dados ficam para depois, na tela de Perfil. Como o catálogo é todo autenticado, as permissões ficam mais simples.
+- **Alterar senha no Perfil** (senha atual + nova senha), pedido do usuário. Usa `account.updatePassword` do Appwrite.
 - **O contador da aba Coleção sai.** O resumo dentro da tela Coleção continua, lido de estatísticas mantidas no servidor.
 - O login simulado e os dados de `src/mocks/` são substituídos pelo Appwrite. Os mocks podem continuar existindo para desenvolvimento, mas nenhuma tela os usa.
 - Backend: código em `backend/` e especificação em `docs/ESPECIFICACAO-BACKEND.md`. É responsabilidade do agente **Alicerce**.

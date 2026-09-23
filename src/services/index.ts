@@ -33,13 +33,21 @@ export {
 export type { CollectionListFilters } from "./collection";
 
 export {
+  changePassword,
   getCurrentUser,
   getSession,
   signIn,
   signOut,
   signUp,
 } from "./auth";
-export type { SignInError, SignInResult, SignUpError, SignUpResult } from "./auth";
+export type {
+  ChangePasswordError,
+  ChangePasswordResult,
+  SignInError,
+  SignInResult,
+  SignUpError,
+  SignUpResult,
+} from "./auth";
 
 export { updateProfile } from "./users";
 export type { UpdateProfileInput, UpdateProfileResult } from "./users";

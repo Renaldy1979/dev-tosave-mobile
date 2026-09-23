@@ -1,14 +1,15 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
   RefreshControl,
+  TextInput,
   View,
 } from "react-native";
 import {
   useRouter,
 } from "expo-router";
-import { LogOut, Moon, RotateCcw, Smartphone, Sun } from "lucide-react-native";
+import { Lock, LogOut, Moon, RotateCcw, Smartphone, Sun } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
 import Constants from "expo-constants";
 import Animated, {
@@ -20,9 +21,11 @@ import { useTheme } from "@/theme/ThemeProvider";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useDelayedFlag } from "@/hooks/useDelayedFlag";
 import {
+  changePassword,
   getCollectionSummary,
   updateProfile,
 } from "@/services";
+import type { ChangePasswordError } from "@/services";
 import type { CollectionSummary } from "@/types";
 import { ScreenContainer } from "@/components/ui/ScreenContainer";
 import { Header } from "@/components/ui/Header";
@@ -69,6 +72,7 @@ export default function Perfil() {
 
   const [editOpen, setEditOpen] = useState(false);
   const [signOutOpen, setSignOutOpen] = useState(false);
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const [signOutLoading, setSignOutLoading] = useState(false);
 
   const loadSummary = useCallback(async () => {
@@ -276,6 +280,11 @@ export default function Perfil() {
           <View className="rounded-lg bg-surface border border-border overflow-hidden">
             <ListRow icon={Heart} label="Minha coleção" onPress={() => router.push("/colecao")} />
             <ListRow icon={Mail} label="E-mail" value={user.email} />
+            <ListRow
+              icon={Lock}
+              label="Alterar senha"
+              onPress={() => setChangePasswordOpen(true)}
+            />
           </View>
           <View className="rounded-lg bg-surface border border-border overflow-hidden mt-3">
             <ListRow
@@ -325,6 +334,16 @@ export default function Perfil() {
           { label: "Sair", variant: "danger", loading: signOutLoading, onPress: handleSignOut },
           { label: "Cancelar", variant: "ghost", onPress: () => setSignOutOpen(false) },
         ]}
+      />
+
+      {/* BottomSheet "Alterar senha" (fase 2) */}
+      <ChangePasswordSheet
+        open={changePasswordOpen}
+        onClose={() => setChangePasswordOpen(false)}
+        onSaved={() => {
+          setChangePasswordOpen(false);
+          show({ type: "success", message: "Senha alterada." });
+        }}
       />
     </ScreenContainer>
   );
@@ -488,3 +507,222 @@ function MailIcon(props: { color: string; size: number; strokeWidth?: number }) 
 
 // re-export do useToast para garantir que a referência não suma em tree-shaking.
 void useToast;
+
+/* ================================================================== */
+/*                          ALTERAÇÃO DE SENHA                         */
+/* ================================================================== */
+
+const MIN_PASSWORD = 8;
+
+/**
+ * BottomSheet "Alterar senha" (`docs/design/telas/07-perfil.md` §3.1).
+ *
+ * Dois campos: Senha atual (validação + comparação) e Nova senha
+ * (mínimo 8). Sucesso mantém a sessão ativa e fecha o sheet.
+ */
+function ChangePasswordSheet({
+  open,
+  onClose,
+  onSaved,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const { c } = useTheme();
+  const { show } = useToast();
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [currentError, setCurrentError] = useState<string | null>(null);
+  const [nextError, setNextError] = useState<string | null>(null);
+  const [banner, setBanner] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const currentRef = useRef<TextInput>(null);
+  const nextRef = useRef<TextInput>(null);
+
+  // Limpa campos ao fechar (senhas nunca ficam guardadas em estado).
+  // O `<BottomSheet>` desmonta o conteúdo quando `open` vira false, mas
+  // mantemos um efeito para reset imediato quando o usuário fecha.
+  // (Não precisa — o componente desmonta; o estado é resetado no
+  // próximo `open=true` via re-render.)
+
+  const focusFirstError = useCallback(() => {
+    if (currentError) {
+      currentRef.current?.focus();
+    } else if (nextError) {
+      nextRef.current?.focus();
+    }
+  }, [currentError, nextError]);
+
+  const handleServerError = useCallback((err: ChangePasswordError) => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => undefined);
+    switch (err) {
+      case "wrong_password":
+        setCurrentError("Senha atual incorreta.");
+        setCurrent("");
+        break;
+      case "weak_password":
+        setNextError("Senha fraca. Use pelo menos 8 caracteres.");
+        break;
+      case "rate_limited":
+        setBanner("Muitas tentativas. Aguarde alguns minutos e tente de novo.");
+        break;
+      case "network":
+        setBanner("Sem conexão. Verifique sua internet e tente novamente.");
+        break;
+      default:
+        setBanner("Não foi possível alterar a senha agora. Tente novamente.");
+    }
+  }, []);
+
+  const handleSubmit = useCallback(async () => {
+    setBanner(null);
+
+    // Validação local antes de chamar o service.
+    let ok = true;
+    if (current.length === 0) {
+      setCurrentError("Informe sua senha atual.");
+      ok = false;
+    } else {
+      setCurrentError(null);
+    }
+    if (next.length === 0) {
+      setNextError("Crie uma nova senha.");
+      ok = false;
+    } else if (next.length < MIN_PASSWORD) {
+      setNextError("A senha precisa ter pelo menos 8 caracteres.");
+      ok = false;
+    } else {
+      setNextError(null);
+    }
+    if (!ok) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => undefined);
+      focusFirstError();
+      return;
+    }
+
+    setSubmitting(true);
+    let result: Awaited<ReturnType<typeof changePassword>> | null = null;
+    try {
+      result = await changePassword(current, next);
+    } catch {
+      setBanner("Sem conexão. Verifique sua internet e tente novamente.");
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => undefined);
+      setSubmitting(false);
+      return;
+    }
+
+    if (!result.ok) {
+      handleServerError(result.error);
+      setSubmitting(false);
+      focusFirstError();
+      return;
+    }
+
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
+    setSubmitting(false);
+    setCurrent("");
+    setNext("");
+    onSaved();
+    show({ type: "success", message: "Senha alterada." });
+  }, [current, next, focusFirstError, handleServerError, onSaved, show]);
+
+  return (
+    <BottomSheet
+      open={open}
+      onClose={onClose}
+      title="Alterar senha"
+      snapPoints="dynamic"
+      footer={
+        <View className="flex-row gap-2">
+          <View className="flex-1">
+            <Button
+              label="Cancelar"
+              variant="ghost"
+              size="md"
+              fullWidth
+              onPress={onClose}
+              disabled={submitting}
+            />
+          </View>
+          <View className="flex-[2]">
+            <Button
+              label="Salvar"
+              variant="primary"
+              size="md"
+              fullWidth
+              loading={submitting}
+              disabled={submitting}
+              onPress={() => {
+                void handleSubmit();
+              }}
+            />
+          </View>
+        </View>
+      }
+    >
+      <View className="px-5 gap-4 pb-2">
+        <Input
+          as="sheet"
+          label="Senha atual"
+          value={current}
+          onChangeText={(t) => {
+            setCurrent(t);
+            if (currentError) setCurrentError(null);
+          }}
+          onBlur={() => {
+            if (current.length > 0) setCurrentError(null);
+          }}
+          error={currentError ?? undefined}
+          leftIcon={Lock}
+          variant="password"
+          autoComplete="password"
+          textContentType="password"
+          returnKeyType="next"
+          editable={!submitting}
+          autoFocus
+          onSubmitEditing={() => nextRef.current?.focus()}
+          ref={currentRef}
+        />
+        <Input
+          as="sheet"
+          label="Nova senha"
+          value={next}
+          onChangeText={(t) => {
+            setNext(t);
+            if (nextError) setNextError(null);
+          }}
+          onBlur={() => {
+            if (next.length > 0 && next.length < MIN_PASSWORD) {
+              setNextError("A senha precisa ter pelo menos 8 caracteres.");
+            }
+          }}
+          error={nextError ?? undefined}
+          leftIcon={Lock}
+          variant="password"
+          autoComplete="password-new"
+          textContentType="newPassword"
+          returnKeyType="go"
+          editable={!submitting}
+          onSubmitEditing={() => {
+            void handleSubmit();
+          }}
+          ref={nextRef}
+          hint={nextError ? undefined : "Mínimo de 8 caracteres."}
+        />
+
+        {banner ? (
+          <View
+            accessibilityLiveRegion="polite"
+            className="rounded-md flex-row items-center gap-2 px-3 py-2.5 bg-flame-soft border"
+            style={{ borderColor: "rgba(255,56,56,0.4)" }}
+          >
+            <Text variant="body-sm" tone="flame" className="flex-1">
+              {banner}
+            </Text>
+          </View>
+        ) : null}
+      </View>
+    </BottomSheet>
+  );
+}

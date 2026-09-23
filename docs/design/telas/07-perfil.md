@@ -33,6 +33,7 @@ Dados do colecionador, preferências do app e saída. Sem telas administrativas 
 │ ┌───────────────────────────┐ │  grupo surface rounded-lg border
 │ │ ♥  Minha coleção        › │ │  ListRow → /colecao
 │ │ ✉  E-mail   ana@email.com │ │  ListRow informativa
+│ │ 🔒 Alterar senha        › │ │  ListRow → sheet "Alterar senha" (fase 2, §3.1)
 │ └───────────────────────────┘ │
 │                               │
 │ ┌───────────────────────────┐ │
@@ -65,7 +66,34 @@ BottomSheet `snapPoints ["dynamic"]`, título "Editar perfil":
 - Sucesso: fecha o sheet, atualiza a tela, Toast success "Perfil atualizado."
 - Erro de validação: inline nos campos (mesmas mensagens do login para e-mail; "Informe seu nome.").
 - Erro do service: banner no sheet "Não foi possível salvar agora. Tente novamente." (sheet continua aberto com os valores).
-- Alteração de senha não entra na fase 1 (login simulado, sem senha real).
+- Alteração de senha não entra na fase 1 (login simulado, sem senha real). Na fase 2, ver §3.1.
+
+## 3.1 Alterar senha (fase 2)
+
+Entrada: ListRow "Alterar senha" (ícone `Lock`, `ChevronRight`) no grupo CONTA, logo abaixo de E-mail. Abre um BottomSheet `snapPoints ["dynamic"]` com o título "Alterar senha", igual ao "Editar perfil". Os inputs usam `BottomSheetTextInput`, e o footer fica acima do teclado.
+
+| Campo | Config | Validação no app | Mensagem (texto oficial) |
+|---|---|---|---|
+| Senha atual | `variant="password"` com olho, `autoComplete="password"`, `textContentType="password"`, `returnKeyType="next"`, foco automático | obrigatória | "Informe sua senha atual." |
+| Nova senha | `variant="password"` com olho, `autoComplete="new-password"` (Android: `"password-new"`), `textContentType="newPassword"`, `returnKeyType="go"` (envia), hint "Mínimo de 8 caracteres." | obrigatória; mínimo de 8 caracteres | "Crie uma nova senha." / "A senha precisa ter pelo menos 8 caracteres." |
+
+- **Sem confirmação de senha**, igual ao Cadastro: o olho de mostrar e ocultar faz esse papel.
+- Footer: "Cancelar" (`ghost`) + "Salvar" (`primary`, loading ao salvar). "Salvar" fica sempre habilitado; ao tocar com erro, o foco vai para o primeiro campo inválido.
+- O erro de campo só aparece depois do primeiro blur ou da primeira tentativa de envio.
+- Chamada: `account.updatePassword(novaSenha, senhaAtual)`.
+
+| Resultado (Appwrite) | Onde aparece | Texto oficial |
+|---|---|---|
+| Sucesso | fecha o sheet + Toast success; **a sessão continua** (não desloga) | "Senha alterada." |
+| `401` (senha atual incorreta) | erro no campo Senha atual; o campo é limpo e recebe foco | "Senha atual incorreta." |
+| `400` (senha fraca) | erro no campo Nova senha | "Senha fraca. Use pelo menos 8 caracteres." |
+| `429` | banner no sheet | "Muitas tentativas. Aguarde alguns minutos e tente de novo." |
+| Sem rede / timeout | banner no sheet | "Sem conexão. Verifique sua internet e tente novamente." |
+| Qualquer outro erro | banner no sheet | "Não foi possível alterar a senha agora. Tente novamente." |
+
+- O banner é o mesmo do Login (`bg-flame-soft border-flame/40` + `AlertCircle`). Todo erro é anunciado ao leitor de tela, e o sheet continua aberto com os valores digitados.
+- Enquanto a chamada não volta: campos com `editable={false}`, "Cancelar" desativado, e arrastar para baixo ou o back do Android não fecham o sheet.
+- Fechar sem salvar descarta os campos. Ao reabrir, o sheet começa vazio (senhas nunca ficam guardadas em estado).
 
 ## 4. Tema
 - SegmentedControl com **Escuro** (`Moon`), **Claro** (`Sun`), **Sistema** (`Smartphone`). Padrão: Escuro.
@@ -83,6 +111,7 @@ BottomSheet `snapPoints ["dynamic"]`, título "Editar perfil":
 | Resumo da coleção / "Minha coleção" | `router.push("/colecao")` (troca de tab) |
 | Tocar em "REPETIDOS" | `router.push("/colecao?dup=1")` |
 | Editar perfil | BottomSheet na própria tela |
+| Alterar senha (fase 2) | BottomSheet na própria tela (§3.1) |
 | Sair | Dialog → `router.replace("/")` |
 
 ## 7. Estados
@@ -108,5 +137,10 @@ Nenhuma lista nesta tela, portanto os empty states oficiais não se aplicam aqui
 - [ ] Mostra nome, e-mail e números da coleção do colecionador.
 - [ ] Editar nome e e-mail com validação e feedback.
 - [ ] Tema Escuro/Claro/Sistema aplicado na hora e persistido.
+- [ ] (Fase 2) Alterar senha:
+  - senha atual + nova senha com mínimo de 8 caracteres, sem campo de confirmação;
+  - erros 401, 400, 429 e sem rede com os textos oficiais;
+  - sucesso mostra o Toast "Senha alterada." e mantém a sessão;
+  - toques de 44 pt, teclado nunca cobre campo nem botão, certo nos dois temas.
 - [ ] Sair pede confirmação e volta à Home como visitante; o voltar não reabre o Perfil.
 - [ ] Nenhum item de administração visível, independente do `role`.

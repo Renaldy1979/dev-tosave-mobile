@@ -15,9 +15,24 @@ import { simulateLatency } from "./_delay";
 export const state: { session: Session } = { session: { user: null } };
 
 /**
- * Senha fixa da fase 1 (ainda em mocks). Na fase 2 o backend valida.
+ * Senha fixa da fase 1 (mock do `usersMock[0]`).
  */
 const DEMO_PASSWORD = "tosave123";
+
+/**
+ * Senha dos usuários em memória para o mock da fase 2.
+ *
+ * O `signIn` aceita `"tosave123"` para o usuário de exemplo; usuários
+ * criados pelo `signUp` recebem uma senha gerada e ficam
+ * trocáveis via `changePassword`.
+ *
+ * Na fase 2 (backend Appwrite) tudo isso sai — `changePassword` passa
+ * a chamar `account.updatePassword(newPassword, oldPassword)` e a
+ * senha nunca fica no client.
+ */
+const passwordsByUser = new Map<string, string>([
+  [usersMock[0]?.id ?? "", DEMO_PASSWORD],
+]);
 
 /** Erros possíveis de `signIn`. Mapeados dos códigos do Appwrite. */
 export type SignInError =
@@ -39,20 +54,21 @@ export type SignInResult =
 export async function signIn(email: string, password: string): Promise<SignInResult> {
   await simulateLatency();
 
-  const demo = usersMock[0];
-  if (!demo) {
-    return { ok: false, error: "unknown" };
-  }
-
-  const emailMatch = email.trim().toLowerCase() === demo.email.toLowerCase();
-  const passwordMatch = password === DEMO_PASSWORD;
-
-  if (!emailMatch || !passwordMatch) {
+  // Procura o usuário nos mocks (inclui os criados via `signUp`).
+  const user = usersMock.find(
+    (u) => u.email.toLowerCase() === email.trim().toLowerCase()
+  );
+  if (!user) {
     return { ok: false, error: "invalid_credentials" };
   }
 
-  state.session = { user: demo };
-  return { ok: true, user: demo };
+  const expected = passwordsByUser.get(user.id);
+  if (expected === undefined || password !== expected) {
+    return { ok: false, error: "invalid_credentials" };
+  }
+
+  state.session = { user };
+  return { ok: true, user };
 }
 
 /** Erros possíveis de `signUp`. Mapeados dos códigos do Appwrite. */
@@ -112,8 +128,63 @@ export async function signUp(input: {
     expo_push_token: null,
   };
   usersMock.push(user);
+  // Mock: guarda a senha em memória para `signIn` e `changePassword`.
+  passwordsByUser.set(user.id, input.password);
   state.session = { user };
   return { ok: true, user };
+}
+
+/** Erros possíveis de `changePassword`. Mapeados dos códigos do Appwrite. */
+export type ChangePasswordError =
+  | "wrong_password"
+  | "weak_password"
+  | "rate_limited"
+  | "network"
+  | "unknown";
+
+/** Resultado de `changePassword`: sucesso ou erro mapeado. */
+export type ChangePasswordResult =
+  | { ok: true }
+  | { ok: false; error: ChangePasswordError };
+
+/**
+ * Altera a senha do usuário atual (`docs/design/telas/07-perfil.md` §3.1).
+ *
+ * Mock (fase 2 sem backend): valida que `currentPassword` bate com a
+ * senha em memória e que `newPassword` tem pelo menos 8 caracteres.
+ * Sucesso: persiste a nova senha em `passwordsByUser`; a sessão
+ * continua aberta.
+ *
+ * Appwrite (fase 2 com backend): chama
+ * `account.updatePassword(newPassword, currentPassword)`. Erros:
+ * - 401 → `wrong_password` (mostra no campo Senha atual).
+ * - 400 → `weak_password` (mostra no campo Nova senha).
+ * - 429 → `rate_limited` (banner).
+ * - rede/timeout → `network` (banner).
+ * - outros → `unknown` (banner).
+ */
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string
+): Promise<ChangePasswordResult> {
+  await simulateLatency();
+
+  const user = state.session.user;
+  if (!user) {
+    return { ok: false, error: "unknown" };
+  }
+
+  if (newPassword.length < 8) {
+    return { ok: false, error: "weak_password" };
+  }
+
+  const expected = passwordsByUser.get(user.id);
+  if (expected === undefined || currentPassword !== expected) {
+    return { ok: false, error: "wrong_password" };
+  }
+
+  passwordsByUser.set(user.id, newPassword);
+  return { ok: true };
 }
 
 /**
