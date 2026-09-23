@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   BackHandler,
   KeyboardAvoidingView,
@@ -9,87 +9,70 @@ import {
   View,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { AlertCircle, Lock, Mail, X } from "lucide-react-native";
+import { AlertCircle, Info, Lock, Mail } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/theme/ThemeProvider";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { useCollectionStore } from "@/hooks/useCollectionStore";
-import { addToCollection } from "@/services/collection";
-// `getDemoCredentials` removido na fase 2 (não há mais dados de exemplo).
+import type { SignInError } from "@/services/auth";
 import { LogoCar } from "@/components/ui/Logo";
 import { ScreenContainer } from "@/components/ui/ScreenContainer";
 import { Text } from "@/components/ui/Text";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Logo } from "@/components/ui/Logo";
-import { IconButton } from "@/components/ui/IconButton";
 import { useToast } from "@/components/ui/Toast";
-
-type LoginVariant = "add" | "colecao" | "perfil" | "default";
-
-const COPY: Record<LoginVariant, { title: string; body: string }> = {
-  add: {
-    title: "Entre para salvar sua coleção",
-    body: "Guarde suas miniaturas e controle as repetidas.",
-  },
-  colecao: {
-    title: "Entre para ver sua coleção",
-    body: "Suas miniaturas ficam salvas na sua conta.",
-  },
-  perfil: {
-    title: "Bem-vindo de volta",
-    body: "Entre para acessar sua conta.",
-  },
-  default: {
-    title: "Bem-vindo de volta",
-    body: "Entre para acessar sua conta.",
-  },
-};
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+/** Textos oficiais dos erros de `signIn` (`02-login.md` §5). */
+const SIGN_IN_ERROR: Record<SignInError, string> = {
+  invalid_credentials: "E-mail ou senha incorretos.",
+  blocked: "Esta conta está desativada.",
+  rate_limited: "Muitas tentativas. Aguarde alguns minutos e tente de novo.",
+  network: "Sem conexão. Verifique sua internet e tente novamente.",
+  unknown: "Não foi possível entrar agora. Tente novamente.",
+};
+
 /**
- * Login modal simulado (`docs/design/telas/02-login.md`).
+ * Login (`docs/design/telas/02-login.md`) — tela de entrada do app
+ * quando não há sessão. Sem X de fechar: não há para onde voltar.
  *
  * Params (expo-router):
- * - `intent=add&carId=123` → depois de entrar, chama `addToCollection`.
- * - `next=/colecao` ou `next=/perfil` → navega para a rota ao concluir.
+ * - `email` → vem preenchido (ex.: a partir do Cadastro).
+ * - `reason=expired` → banner "Sua sessão expirou. Entre novamente."
+ * - `reason=created` → banner "Conta criada. Entre para continuar."
  *
- * Sem params = "default" (Bem-vindo de volta).
- *
- * Com sessão ativa, fecha sozinho antes de renderizar (§6 "Aberto já
- * com sessão").
+ * Com sessão ativa, vai direto para as tabs.
  */
 export default function Login() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ intent?: string; carId?: string; next?: string }>();
-  const insets = useSafeAreaInsets();
+  const params = useLocalSearchParams<{ email?: string; reason?: string }>();
   const { c } = useTheme();
-  const { user, signIn, refresh } = useCurrentUser();
-  const collectionStore = useCollectionStore();
+  const { user, signIn } = useCurrentUser();
   const { show } = useToast();
 
-  const variant: LoginVariant = useMemo(() => {
-    if (params.intent === "add" && params.carId) return "add";
-    if (params.next === "/colecao") return "colecao";
-    if (params.next === "/perfil") return "perfil";
-    return "default";
-  }, [params.intent, params.carId, params.next]);
-
-  // Se já há sessão ao montar (deep link), fecha.
+  // Com sessão (deep link, ou sessão restaurada), vai para as tabs.
   useEffect(() => {
     if (user) {
-      router.back();
+      router.replace("/(tabs)");
     }
   }, [user, router]);
 
-  const [email, setEmail] = useState("");
+  const infoBanner =
+    params.reason === "expired"
+      ? "Sua sessão expirou. Entre novamente."
+      : params.reason === "created"
+        ? "Conta criada. Entre para continuar."
+        : null;
+
+  const [email, setEmail] = useState(params.email ?? "");
   const [password, setPassword] = useState("");
   const [emailError, setEmailError] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [banner, setBanner] = useState<string | null>(null);
+  const [showInfo, setShowInfo] = useState(infoBanner !== null);
   const [submitting, setSubmitting] = useState(false);
+  const emailRef = useRef<TextInput>(null);
   const passwordRef = useRef<TextInput>(null);
 
   const validate = useCallback(
@@ -108,84 +91,36 @@ export default function Login() {
 
   const handleSubmit = useCallback(async () => {
     setBanner(null);
-    const ok = validate({ email: true, password: true });
-    if (!ok) {
+    setShowInfo(false);
+    if (!validate({ email: true, password: true })) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => undefined);
+      if (!EMAIL_RE.test(email.trim())) emailRef.current?.focus();
+      else passwordRef.current?.focus();
       return;
     }
     setSubmitting(true);
 
     // Bloqueia back enquanto envia.
     const backSub = BackHandler.addEventListener("hardwareBackPress", () => true);
-
-    let result: Awaited<ReturnType<typeof signIn>> | null = null;
-    try {
-      result = await signIn(email.trim(), password);
-    } catch {
-      setBanner("Não foi possível entrar agora. Tente novamente.");
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => undefined);
-      setSubmitting(false);
-      backSub.remove();
-      return;
-    }
-
-    if (!result.ok) {
-      setBanner("E-mail ou senha incorretos.");
-      setPassword("");
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => undefined);
-      setSubmitting(false);
-      backSub.remove();
-      return;
-    }
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
-
-    // Conclui a ação pendente antes de fechar.
-    if (variant === "add" && params.carId) {
-      try {
-        // A Function `collection` é idempotente: se o item já existir
-        // (quantity ≥ 1), o `add` soma 1; senão cria com 1. Por isso
-        // não precisa checar a quantidade antes — basta chamar.
-        await addToCollection(params.carId);
-        // O store compartilhado já recarrega automaticamente quando
-        // o user muda (via useEffect), mas garantimos consistência
-        // imediata para a próxima tela.
-        await collectionStore.refresh();
-        show({ type: "success", message: "Adicionada à sua coleção." });
-      } catch {
-        show({ type: "danger", message: "Não foi possível atualizar sua coleção." });
-      }
-    }
-
-    // Reavalia o estado para garantir.
-    await refresh();
-
-    show({ type: "success", message: "Bem-vindo de volta." });
-
-    // Fecha modal e, em seguida, navega para `next` se houver.
+    const result = await signIn(email.trim(), password);
     backSub.remove();
     setSubmitting(false);
-    router.back();
-    if (params.next && params.next.startsWith("/") && params.next !== "/login") {
-      // Pequeno delay para o back terminar antes do navigate.
-      setTimeout(() => {
-        router.navigate(params.next as "/colecao" | "/perfil");
-      }, 50);
-    }
-  }, [
-    validate,
-    signIn,
-    email,
-    password,
-    variant,
-    params.carId,
-    params.next,
-    refresh,
-    router,
-    collectionStore,
-    show,
-  ]);
 
-  const copy = COPY[variant];
+    if (!result.ok) {
+      setBanner(SIGN_IN_ERROR[result.error]);
+      if (result.error === "invalid_credentials") {
+        setPassword("");
+        passwordRef.current?.focus();
+      }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => undefined);
+      return;
+    }
+
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
+    show({ type: "success", message: "Bem-vindo de volta." });
+    // O Login é a raiz do stack: `replace`, nunca `back`.
+    router.replace("/(tabs)");
+  }, [validate, signIn, email, password, router, show]);
 
   return (
     <ScreenContainer bg="ink" edges={["bottom"]} className="flex-1">
@@ -219,20 +154,6 @@ export default function Login() {
         <View style={{ maxWidth: 440, width: "100%" }} className="items-center">
           <Logo variant="dark" size="md" />
         </View>
-        {/* Fechar (canto superior esquerdo) — no pageSheet do iOS, não leva inset superior */}
-        <View
-          className="absolute left-3"
-          style={{ top: Platform.OS === "ios" ? 8 : insets.top + 8 }}
-        >
-          <IconButton
-            icon={X}
-            variant="glass"
-            size="md"
-            accessibilityLabel="Fechar"
-            onPress={() => router.back()}
-            disabled={submitting}
-          />
-        </View>
       </View>
 
       {/* conteúdo do formulário */}
@@ -257,11 +178,25 @@ export default function Login() {
             className="text-ink-fg"
             accessibilityRole="header"
           >
-            {copy.title}
+            Entre na sua conta
           </Text>
           <Text variant="body" tone="ink" className="text-ink-fg/70 mt-2">
-            {copy.body}
+            Sua coleção de miniaturas, organizada.
           </Text>
+
+          {/* banner informativo (sessão expirada / conta criada) */}
+          {showInfo && infoBanner ? (
+            <View
+              accessibilityLiveRegion="polite"
+              className="mt-4 rounded-md flex-row items-center gap-2 px-3 py-2.5 bg-surface-2 border"
+              style={{ borderColor: c("info", 0.4) }}
+            >
+              <Info size={18} color={c("info")} strokeWidth={1.75} />
+              <Text variant="body-sm" className="flex-1">
+                {infoBanner}
+              </Text>
+            </View>
+          ) : null}
 
           <View className="mt-6 gap-4">
             <Input
@@ -281,8 +216,9 @@ export default function Login() {
               textContentType="username"
               returnKeyType="next"
               editable={!submitting}
-              autoFocus
+              autoFocus={!params.email}
               onSubmitEditing={() => passwordRef.current?.focus()}
+              ref={emailRef}
             />
             <Input
               label="Senha"
@@ -301,6 +237,7 @@ export default function Login() {
               returnKeyType="go"
               onSubmitEditing={handleSubmit}
               editable={!submitting}
+              autoFocus={Boolean(params.email)}
               ref={passwordRef}
             />
           </View>
@@ -313,7 +250,7 @@ export default function Login() {
               style={{ borderColor: "rgba(255,56,56,0.4)" }}
             >
               <AlertCircle size={18} color={c("flame")} strokeWidth={1.75} />
-              <Text variant="body-sm" tone="flame">
+              <Text variant="body-sm" tone="flame" className="flex-1">
                 {banner}
               </Text>
             </View>
@@ -331,7 +268,7 @@ export default function Login() {
             className="mt-6"
           />
 
-          {/* Link "Criar conta" — fase 2, app travado. */}
+          {/* Link "Criar conta" */}
           <View className="mt-6 items-center">
             <Text variant="caption" tone="ink" className="text-ink-fg/60 text-center">
               Ainda não tem conta?
@@ -340,6 +277,7 @@ export default function Login() {
               accessibilityRole="link"
               accessibilityLabel="Criar conta"
               onPress={() => router.push("/cadastro")}
+              disabled={submitting}
               hitSlop={12}
               className="mt-2 active:opacity-70"
               style={{ minHeight: 44, justifyContent: "center" }}

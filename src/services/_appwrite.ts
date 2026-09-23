@@ -97,11 +97,45 @@ export type ServiceErrorCode = "unauthorized" | "network" | "unknown";
 export class ServiceError extends Error {
   code: ServiceErrorCode;
   cause?: unknown;
+  /** HTTP status do Appwrite (0 quando não houve resposta). */
+  status: number;
+  /** `type` do erro do Appwrite (ex.: `row_not_found`), ou `""`. */
+  type: string;
   constructor(code: ServiceErrorCode, message: string, cause?: unknown) {
     super(message);
     this.code = code;
     this.cause = cause;
+    const info = appwriteErrorInfo(cause);
+    this.status = info.status;
+    this.type = info.type;
   }
+}
+
+/**
+ * Lê `status` e `type` de um erro do Appwrite, seja a própria
+ * `AppwriteException` ou um `ServiceError` que a embrulhou. O `type`
+ * vem do campo `type` da exceção ou, na falta dele, do JSON em
+ * `response`.
+ */
+export function appwriteErrorInfo(err: unknown): { status: number; type: string } {
+  if (err instanceof ServiceError) return { status: err.status, type: err.type };
+  if (!(err instanceof AppwriteException)) return { status: 0, type: "" };
+  let type = err.type ?? "";
+  if (!type && typeof err.response === "string" && err.response) {
+    try {
+      const parsed = JSON.parse(err.response) as { type?: unknown };
+      if (typeof parsed.type === "string") type = parsed.type;
+    } catch {
+      // `response` não é JSON: fica sem `type`.
+    }
+  }
+  return { status: err.code ?? 0, type };
+}
+
+/** `true` quando o Appwrite respondeu 404 (linha/arquivo inexistente). */
+export function isNotFound(err: unknown): boolean {
+  const { status, type } = appwriteErrorInfo(err);
+  return status === 404 || type === "row_not_found" || type === "document_not_found";
 }
 
 type UnauthorizedHandler = () => void;

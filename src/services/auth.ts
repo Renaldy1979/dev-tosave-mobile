@@ -3,6 +3,8 @@ import {
   withServiceError,
   ServiceError,
   setOnUnauthorized,
+  AppwriteException,
+  appwriteErrorInfo,
 } from "./_appwrite";
 import {
   getCurrentSession,
@@ -13,10 +15,11 @@ import {
 import type { Session } from "@/types";
 
 /**
- * Erros possíveis de `signIn`. Mapeados dos códigos do Appwrite.
+ * Erros possíveis de `signIn`. Mapeados pelo `type` do Appwrite.
  */
 export type SignInError =
   | "invalid_credentials"
+  | "blocked"
   | "rate_limited"
   | "network"
   | "unknown";
@@ -28,21 +31,22 @@ export type SignInResult =
 
 /**
  * Login. Chama `account.createEmailPasswordSession`.
- * Erros:
- * - 401 → invalid_credentials
+ * Erros (por `type`):
+ * - `user_invalid_credentials` → invalid_credentials
+ * - `user_blocked` → blocked
+ * - `user_session_already_exists` → sucesso (segue com `account.get`)
  * - 429 → rate_limited
  * - outros → unknown
  */
 export async function signIn(email: string, password: string): Promise<SignInResult> {
   try {
-    await withServiceError(() =>
-      account.createEmailPasswordSession(email.trim().toLowerCase(), password)
-    );
-    const user = requireUser(await fetchCurrentUser());
+    await openSession(email, password);
+    const user = await fetchCurrentUser();
+    if (!user) return { ok: false, error: "unknown" };
     setCurrentSession({ user });
     return { ok: true, user };
   } catch (err) {
-    return { ok: false, error: mapAuthError(err) };
+    return { ok: false, error: mapSignInError(err) };
   }
 }
 
@@ -50,7 +54,11 @@ export async function signIn(email: string, password: string): Promise<SignInRes
 export type SignUpError =
   | "email_in_use"
   | "weak_password"
+  | "common_password"
+  | "personal_data"
   | "invalid_email"
+  | "blocked"
+  | "session_failed"
   | "rate_limited"
   | "network"
   | "unknown";
@@ -61,42 +69,50 @@ export type SignUpResult =
   | { ok: false; error: SignUpError };
 
 /**
- * Cadastro. Cria conta + sessão. O Appwrite já abre sessão no
- * `createEmailPasswordSession` se passado logo em seguida.
+ * Cadastro. Cria a conta e abre a sessão em seguida.
  *
- * Erros:
- * - 409 user_already_exists → email_in_use
- * - 400 com argumento `password` → weak_password
- * - 400 com argumento `email` → invalid_email
+ * Erros de `account.create` (por `type`):
+ * - `user_already_exists` / `user_email_already_exists` → email_in_use
+ * - `password_personal_data` → personal_data
+ * - `password_recently_used` / `password_in_history` → common_password
+ * - `general_argument_invalid` em `password` → weak_password (menos de
+ *   8 caracteres) ou common_password (política de dicionário)
+ * - `general_argument_invalid` em `email` → invalid_email
  * - 429 → rate_limited
+ *
+ * Conta criada mas sessão recusada → `session_failed` (a tela manda
+ * para o Login com o e-mail preenchido). `user_session_already_exists`
+ * conta como sucesso.
  */
 export async function signUp(input: {
   name: string;
   email: string;
   password: string;
 }): Promise<SignUpResult> {
+  const email = input.email.trim().toLowerCase();
   try {
-    const userId = "user-" + cryptoId();
-    await withServiceError(() =>
+    await authCall(() =>
       account.create({
-        userId,
-        email: input.email.trim().toLowerCase(),
+        userId: "user-" + cryptoId(),
+        email,
         password: input.password,
         name: input.name.trim(),
       })
     );
-    await withServiceError(() =>
-      account.createEmailPasswordSession(
-        input.email.trim().toLowerCase(),
-        input.password
-      )
-    );
-    const user = requireUser(await fetchCurrentUser());
-    setCurrentSession({ user });
-    return { ok: true, user };
   } catch (err) {
-    return { ok: false, error: mapSignUpError(err) };
+    return { ok: false, error: mapSignUpError(err, input.password) };
   }
+  try {
+    await openSession(email, input.password);
+  } catch (err) {
+    if (isNetwork(err)) return { ok: false, error: "network" };
+    if (appwriteErrorInfo(err).type === "user_blocked") return { ok: false, error: "blocked" };
+    return { ok: false, error: "session_failed" };
+  }
+  const user = await fetchCurrentUser();
+  if (!user) return { ok: false, error: "session_failed" };
+  setCurrentSession({ user });
+  return { ok: true, user };
 }
 
 /** Erros possíveis de `changePassword`. */
@@ -126,8 +142,9 @@ export async function changePassword(
   newPassword: string
 ): Promise<ChangePasswordResult> {
   try {
-    await withServiceError(() =>
-      account.updatePassword(newPassword, currentPassword)
+    // `authCall`: senha atual errada é 401 e não pode derrubar a sessão.
+    await authCall(() =>
+      account.updatePassword({ password: newPassword, oldPassword: currentPassword })
     );
     return { ok: true };
   } catch (err) {
@@ -237,53 +254,83 @@ async function fetchCurrentUser(): Promise<User | null> {
   }
 }
 
-function requireUser(user: User | null): User {
-  if (!user) {
-    throw new Error("auth: sessão perdida entre signIn e fetchCurrentUser");
-  }
-  return user;
-}
 
 /* ================================================================== */
 /*                       MAPEAMENTO DE ERROS                           */
 /* ================================================================== */
-
-interface AppwriteErr {
-  code?: number;
-  type?: string;
-  response?: { type?: string };
-}
-
-function isUnauthorized(err: unknown): boolean {
-  return err instanceof ServiceError && err.code === "unauthorized";
-}
 
 function isNetwork(err: unknown): boolean {
   return err instanceof ServiceError && err.code === "network";
 }
 
 function isRateLimited(err: unknown): boolean {
-  const e = err as AppwriteErr;
-  return e?.code === 429;
+  return appwriteErrorInfo(err).status === 429;
 }
 
-function mapAuthError(err: unknown): SignInError {
+/**
+ * Chamada de Auth **sem** `withServiceError`: um 401 aqui é resposta
+ * esperada (senha errada, conta bloqueada) e não pode disparar o
+ * handler de sessão expirada. A `AppwriteException` sobe intacta para
+ * o mapeamento por `type`; falha sem resposta vira `ServiceError`
+ * `network`.
+ */
+async function authCall<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    if (err instanceof AppwriteException) throw err;
+    throw new ServiceError("network", "Sem conexão.", err);
+  }
+}
+
+/** Abre a sessão; `user_session_already_exists` conta como sucesso. */
+async function openSession(email: string, password: string): Promise<void> {
+  try {
+    await authCall(() =>
+      account.createEmailPasswordSession({
+        email: email.trim().toLowerCase(),
+        password,
+      })
+    );
+  } catch (err) {
+    if (appwriteErrorInfo(err).type === "user_session_already_exists") return;
+    throw err;
+  }
+}
+
+function argumentMessage(err: unknown): string {
+  return err instanceof Error ? err.message.toLowerCase() : "";
+}
+
+function mapSignInError(err: unknown): SignInError {
   if (isNetwork(err)) return "network";
   if (isRateLimited(err)) return "rate_limited";
-  if (isUnauthorized(err)) return "invalid_credentials";
-  const e = err as AppwriteErr;
-  if (e?.code === 401) return "invalid_credentials";
+  const { type } = appwriteErrorInfo(err);
+  if (type === "user_blocked") return "blocked";
+  // `general_argument_invalid`: senha com menos de 8 caracteres nunca
+  // é válida no Appwrite; para quem entra, é credencial errada.
+  if (type === "user_invalid_credentials" || type === "general_argument_invalid") {
+    return "invalid_credentials";
+  }
   return "unknown";
 }
 
-function mapSignUpError(err: unknown): SignUpError {
+function mapSignUpError(err: unknown, password: string): SignUpError {
   if (isNetwork(err)) return "network";
   if (isRateLimited(err)) return "rate_limited";
-  const e = err as AppwriteErr;
-  if (e?.code === 409 || e?.response?.type === "user_already_exists") return "email_in_use";
-  if (e?.code === 400) {
-    const message = (err as { message?: string })?.message?.toLowerCase() ?? "";
-    if (message.includes("password")) return "weak_password";
+  const { status, type } = appwriteErrorInfo(err);
+  if (type === "user_already_exists" || type === "user_email_already_exists" || status === 409) {
+    return "email_in_use";
+  }
+  if (type === "password_personal_data") return "personal_data";
+  if (type === "password_recently_used" || type === "password_in_history") {
+    return "common_password";
+  }
+  if (type === "general_argument_invalid") {
+    const message = argumentMessage(err);
+    if (message.includes("password")) {
+      return password.length >= 8 ? "common_password" : "weak_password";
+    }
     if (message.includes("email")) return "invalid_email";
   }
   return "unknown";
@@ -292,13 +339,10 @@ function mapSignUpError(err: unknown): SignUpError {
 function mapChangePasswordError(err: unknown): ChangePasswordError {
   if (isNetwork(err)) return "network";
   if (isRateLimited(err)) return "rate_limited";
-  const e = err as AppwriteErr;
-  if (e?.code === 401 || e?.response?.type === "user_invalid_credentials") {
-    return "wrong_password";
-  }
-  if (e?.code === 400) {
-    const message = (err as { message?: string })?.message?.toLowerCase() ?? "";
-    if (message.includes("password")) return "weak_password";
+  const { status, type } = appwriteErrorInfo(err);
+  if (type === "user_invalid_credentials" || status === 401) return "wrong_password";
+  if (type === "general_argument_invalid" && argumentMessage(err).includes("password")) {
+    return "weak_password";
   }
   return "unknown";
 }

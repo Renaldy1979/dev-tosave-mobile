@@ -112,6 +112,12 @@ export default function Cadastro() {
     }
   }, [nameError, emailError]);
 
+  // Volta ao Login; sem histórico (deep link), substitui pela raiz.
+  const goBack = useCallback(() => {
+    if (router.canGoBack()) router.back();
+    else router.replace("/login");
+  }, [router]);
+
   const handleSubmit = useCallback(async () => {
     setBanner(null);
     if (!validate()) {
@@ -135,6 +141,17 @@ export default function Cadastro() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => undefined);
       setSubmitting(false);
       backSub.remove();
+      return;
+    }
+
+    if (!result.ok && result.error === "session_failed") {
+      // Conta criada, mas a sessão não abriu: segue para o Login.
+      setSubmitting(false);
+      backSub.remove();
+      router.replace({
+        pathname: "/login",
+        params: { email: email.trim().toLowerCase(), reason: "created" },
+      });
       return;
     }
 
@@ -182,6 +199,15 @@ export default function Cadastro() {
         case "weak_password":
           setPasswordError("Senha fraca. Use pelo menos 8 caracteres.");
           break;
+        case "common_password":
+          setPasswordError("Essa senha é muito comum. Escolha outra.");
+          break;
+        case "personal_data":
+          setPasswordError("A senha não pode conter seu nome ou e-mail.");
+          break;
+        case "blocked":
+          setBanner("Esta conta está desativada.");
+          break;
         case "invalid_email":
           setEmailError("E-mail inválido.");
           break;
@@ -210,7 +236,7 @@ export default function Cadastro() {
           variant="glass"
           size="md"
           accessibilityLabel="Voltar"
-          onPress={() => router.back()}
+          onPress={goBack}
           className="absolute left-3"
         />
         <Logo variant="dark" size="sm" />
@@ -368,7 +394,8 @@ export default function Cadastro() {
             <Pressable
               accessibilityRole="link"
               accessibilityLabel="Entrar"
-              onPress={() => router.replace("/login")}
+              onPress={goBack}
+              disabled={submitting}
               hitSlop={12}
               className="mt-2 active:opacity-70"
               style={{ minHeight: 44, justifyContent: "center" }}
