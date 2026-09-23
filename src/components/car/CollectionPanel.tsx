@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { View } from "react-native";
 import { Heart, X } from "lucide-react-native";
 import Animated, {
@@ -7,6 +7,7 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from "react-native-reanimated";
+import { scheduleOnRN } from "react-native-worklets";
 import { useTheme } from "@/theme/ThemeProvider";
 import { Text } from "@/components/ui/Text";
 import { Badge } from "@/components/ui/Badge";
@@ -22,7 +23,9 @@ import { duration } from "@/theme/motion";
  * "Na sua coleção" com a quantidade, badge "Repetido" quando qty > 1,
  * QuantityStepper e link "Remover da coleção" (abre ConfirmDialog).
  *
- * Animação de altura 320 ms ao montar/desmontar.
+ * Animação de altura/opacidade (320 ms) ao montar/desmontar. `mounted`
+ * controla o ciclo de vida: o painel só sai da árvore JS depois da
+ * animação de saída terminar (via `scheduleOnRN`).
  */
 type Props = {
   visible: boolean;
@@ -32,28 +35,51 @@ type Props = {
   onRemove: () => Promise<void> | void;
 };
 
+const PANEL_MAX_HEIGHT = 200;
+
 export function CollectionPanel({ visible, quantity, carTitle, onChange, onRemove }: Props) {
   const { c } = useTheme();
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const height = useSharedValue(visible ? 1 : 0);
+  // `mounted` é true sempre que o painel está visível ou animando para
+  // sair. Permite a animação de saída terminar antes de desmontar.
+  const [mounted, setMounted] = useState(visible);
   const opacity = useSharedValue(visible ? 1 : 0);
+  // `progress` 0 = fechado, 1 = aberto. Animamos maxHeight e opacity a
+  // partir deste progress (sem scaleY para não distorcer o conteúdo).
+  const progress = useSharedValue(visible ? 1 : 0);
 
-  // Sincroniza o `visible` da prop com a animação
-  if (visible && height.value === 0) {
-    height.value = withTiming(1, { duration: duration.slow, easing: Easing.out(Easing.ease) });
-    opacity.value = withTiming(1, { duration: duration.slow });
-  } else if (!visible && height.value === 1) {
-    height.value = withTiming(0, { duration: duration.fast });
-    opacity.value = withTiming(0, { duration: duration.fast });
-  }
+  // Sincroniza a prop `visible` com a animação. Dispara a animação de
+  // saída, e quando termina chama `setMounted(false)`.
+  useEffect(() => {
+    if (visible) {
+      setMounted(true);
+      progress.value = withTiming(1, {
+        duration: duration.slow,
+        easing: Easing.out(Easing.ease),
+      });
+      opacity.value = withTiming(1, { duration: duration.slow });
+    } else {
+      progress.value = withTiming(
+        0,
+        { duration: duration.fast, easing: Easing.out(Easing.ease) },
+        (finished) => {
+          "worklet";
+          if (finished) scheduleOnRN(setMounted, false);
+        }
+      );
+      opacity.value = withTiming(0, { duration: duration.fast });
+    }
+    // progress e opacity são SharedValues estáveis — não precisam entrar
+    // nas deps. Só `visible` reage.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible]);
 
   const containerStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,
-    maxHeight: height.value === 0 ? 0 : 200,
-    transform: [{ scaleY: height.value }],
+    maxHeight: progress.value * PANEL_MAX_HEIGHT,
   }));
 
-  if (!visible && height.value === 0) return null;
+  if (!mounted) return null;
 
   return (
     <>

@@ -1,12 +1,14 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { View } from "react-native";
 import { ChevronLeft } from "lucide-react-native";
 import Animated, {
+  useAnimatedReaction,
   useAnimatedStyle,
   useDerivedValue,
   useSharedValue,
 } from "react-native-reanimated";
 import type { SharedValue } from "react-native-reanimated";
+import { scheduleOnRN } from "react-native-worklets";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useTheme } from "@/theme/ThemeProvider";
@@ -28,6 +30,11 @@ import { IconButton } from "./IconButton";
  * `scrollY` é um `SharedValue<number>` da tela que cresce conforme rola.
  * Quando omitido, o Header não reage à rolagem (mantém estado
  * expandido/colapsado inicial conforme `scrollY` interno).
+ *
+ * Sincronização UI → JS: `useAnimatedReaction` + `scheduleOnRN` (do
+ * `react-native-worklets`; `runOnJS` do reanimated está deprecated).
+ * Evita o WARN "[Reanimated] Reading from value during component render"
+ * e o `setInterval` de 80 ms (item 33 da revisão do lote 02).
  */
 type HeaderVariant = "stack" | "large" | "transparent";
 
@@ -184,6 +191,17 @@ function LargeHeader({
   surfaceBg: string;
   className?: string;
 }) {
+  // `isCollapsed` para o título pequeno só aparece quando o título
+  // grande sumiu. Sem o ponteEvents no JSX direto.
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  useAnimatedReaction(
+    () => collapse.value > 0.5,
+    (next, prev) => {
+      "worklet";
+      if (next !== prev) scheduleOnRN(setIsCollapsed, next);
+    }
+  );
+
   const largeStyle = useAnimatedStyle(() => ({
     opacity: 1 - collapse.value,
     transform: [{ translateY: -collapse.value * 8 }],
@@ -206,7 +224,10 @@ function LargeHeader({
       >
         <View style={{ width: 40 }} />
         <View className="flex-1 items-center">
-          <Animated.View style={smallStyle} pointerEvents={collapse.value > 0.5 ? "auto" : "none"}>
+          <Animated.View
+            style={smallStyle}
+            pointerEvents={isCollapsed ? "auto" : "none"}
+          >
             {title ? (
               <Text variant="h3" numberOfLines={1} className="text-center">
                 {title}
@@ -256,20 +277,17 @@ function TransparentHeader({
   className?: string;
 }) {
   const { c } = useTheme();
-  // Resolve `c("border")` fora do worklet — Reanimated 4 trava se você
-  // chama uma função JS comum dentro do `useAnimatedStyle` (item 1 da
-  // revisão do lote 02).
   const borderColor = c("border");
+  // `isCollapsed` para alternar `pointerEvents` do título sem ler
+  // o SharedValue no JSX (item 33 da revisão).
   const [isCollapsed, setIsCollapsed] = useState(false);
-  // Sincroniza estado JS com o SharedValue da UI thread
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const val = (collapse as SharedValue<number>).value;
-      const next = val > 0.5;
-      setIsCollapsed((cur) => (cur === next ? cur : next));
-    }, 80);
-    return () => clearInterval(interval);
-  }, [collapse]);
+  useAnimatedReaction(
+    () => collapse.value > 0.5,
+    (next, prev) => {
+      "worklet";
+      if (next !== prev) scheduleOnRN(setIsCollapsed, next);
+    }
+  );
 
   const barStyle = useAnimatedStyle(() => ({
     backgroundColor: collapse.value > 0.5 ? surfaceBg : "transparent",
