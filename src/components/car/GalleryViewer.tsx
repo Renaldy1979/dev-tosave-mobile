@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Dimensions,
   FlatList,
@@ -42,7 +42,13 @@ const SCREEN = Dimensions.get("window");
 export function GalleryViewer({ images, initialIndex, open, onClose, title }: Props) {
   const insets = useSafeAreaInsets();
   const { c } = useTheme();
+  // Reseta o índice sempre que o modal abre (item 21 da revisão: o
+  // useState inicial só roda uma vez e a 2ª abertura mostra o índice
+  // antigo).
   const [index, setIndex] = useState(initialIndex);
+  useEffect(() => {
+    if (open) setIndex(Math.max(0, Math.min(images.length - 1, initialIndex)));
+  }, [open, initialIndex, images.length]);
   const listRef = useRef<FlatList<{ id: string; uri: string }>>(null);
 
   const handleMomentumEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {

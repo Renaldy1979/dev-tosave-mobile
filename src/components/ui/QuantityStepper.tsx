@@ -115,7 +115,7 @@ export function QuantityStepper({
         className="items-center justify-center rounded-xs active:opacity-70"
         style={{ width: box, height: box }}
       >
-        <Minus color={c(isGlass ? "primary-fg" : "fg")} size={iconSize} strokeWidth={1.75} />
+        <Minus color={isGlass ? "#FFFFFF" : c("fg")} size={iconSize} strokeWidth={1.75} />
       </Pressable>
       <Animated.View
         style={[
@@ -141,7 +141,7 @@ export function QuantityStepper({
         style={{ width: box, height: box }}
       >
         <Plus
-          color={c(isGlass ? "primary-fg" : "fg")}
+          color={isGlass ? "#FFFFFF" : c("fg")}
           size={iconSize}
           strokeWidth={1.75}
           opacity={value >= MAX ? 0.4 : 1}

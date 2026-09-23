@@ -33,6 +33,7 @@ type Props = {
   inCollection?: boolean;
   quantity?: number;
   onPress: () => void;
+  onLongPress?: () => void;
   onToggleCollection?: () => void;
   onChangeQuantity?: (next: number) => void;
   onRemoveRequest?: () => void;
@@ -45,6 +46,7 @@ export function CarCard({
   inCollection = false,
   quantity = 0,
   onPress,
+  onLongPress,
   onToggleCollection,
   onChangeQuantity,
   onRemoveRequest,
@@ -96,6 +98,7 @@ export function CarCard({
       accessibilityHint={accessibilityHint}
       accessibilityState={{ selected: inCollection }}
       onPress={onPress}
+      onLongPress={onLongPress}
       className={cn(
         "rounded-lg bg-surface border border-border overflow-hidden active:bg-surface-3"
       )}
@@ -145,9 +148,11 @@ export function CarCard({
           {car.title}
         </Text>
         {isCollection && quantity > 1 ? (
-          <Text variant="caption" tone="flame" className="font-sans-semibold mt-0.5">
-            Repetido ×{quantity}
-          </Text>
+          <View className="self-start mt-0.5">
+            <Badge variant="flame" size="sm">
+              Repetido ×{quantity}
+            </Badge>
+          </View>
         ) : (
           <Text variant="caption" tone="muted" numberOfLines={1}>
             {car.serieTitle}

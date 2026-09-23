@@ -49,7 +49,7 @@ export function BottomSheet({
 }: Props) {
   const ref = useRef<BottomSheetModal>(null);
   const insets = useSafeAreaInsets();
-  const { c } = useTheme();
+  const { c, scheme } = useTheme();
 
   const resolvedSnapPoints = useMemo<(string | number)[]>(() => {
     if (snapPoints === "dynamic") return [];
@@ -126,29 +126,45 @@ export function BottomSheet({
       keyboardBehavior="interactive"
       android_keyboardInputMode="adjustResize"
     >
-      <ThemeScope>
-        <BottomSheetView style={{ flex: 1 }}>
-          {header}
-          {scrollable ? (
-            <BottomSheetScrollView
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ paddingBottom: footer ? 16 : 24 }}
-            >
-              {children}
-            </BottomSheetScrollView>
-          ) : (
-            <View className="flex-1 px-5 py-3">{children}</View>
-          )}
-          {footer ? (
-            <View
-              className="px-5 pt-3 bg-surface border-t border-border"
-              style={{ paddingBottom: Math.max(insets.bottom, 12) }}
-            >
-              {footer}
-            </View>
-          ) : null}
-        </BottomSheetView>
+      <ThemeScope scheme={scheme}>
+        {/* `flex: 1` quebra o modo `dynamic` do @gorhom. */}
+        {isDynamic ? (
+          <BottomSheetView>
+            {header}
+            {children}
+            {footer ? (
+              <View
+                className="px-5 pt-3 bg-surface border-t border-border"
+                style={{ paddingBottom: Math.max(insets.bottom, 12) }}
+              >
+                {footer}
+              </View>
+            ) : null}
+          </BottomSheetView>
+        ) : (
+          <BottomSheetView style={{ flex: 1 }}>
+            {header}
+            {scrollable ? (
+              <BottomSheetScrollView
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingBottom: footer ? 16 : 24 }}
+              >
+                {children}
+              </BottomSheetScrollView>
+            ) : (
+              <View className="flex-1 px-5 py-3">{children}</View>
+            )}
+            {footer ? (
+              <View
+                className="px-5 pt-3 bg-surface border-t border-border"
+                style={{ paddingBottom: Math.max(insets.bottom, 12) }}
+              >
+                {footer}
+              </View>
+            ) : null}
+          </BottomSheetView>
+        )}
       </ThemeScope>
     </BottomSheetModal>
   );

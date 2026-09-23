@@ -58,7 +58,7 @@ type Props = {
     attributes?: LoadState;
   };
   onRetryLoad?: () => void;
-  liveCount: (next: FilterDraft) => number;
+  liveCount: (next: FilterDraft, onResult: (n: number) => void) => void;
   /** Quando fornecido, "Limpar" também limpa a coleção; duplicatasOnly some sem essa prop. */
   showDuplicates?: boolean;
   initialSection?: "year" | "serie" | "brand" | "attr";
@@ -81,15 +81,34 @@ export function FilterSheet({
 }: Props) {
   const { c } = useTheme();
   const [local, setLocal] = useState<FilterDraft>(draft);
+  // Contagem ao vivo: estado próprio do sheet, recalculado com
+  // debounce de 200 ms quando `local` muda (item 8 da revisão).
+  // `null` = "carregando" — mostra "Ver resultados" sem número.
+  const [count, setCount] = useState<number | null>(null);
 
-  // Sempre que o sheet abre, sincroniza o rascunho com o filtro aplicado.
+  // Sincroniza o rascunho com o filtro aplicado ao abrir.
   useEffect(() => {
     if (open) {
       setLocal(draft);
     }
   }, [open, draft]);
 
-  const count = useMemo(() => liveCount(local), [local, liveCount]);
+  // Debounce da contagem.
+  useEffect(() => {
+    if (!open) {
+      setCount(null);
+      return;
+    }
+    setCount(null);
+    const timer = setTimeout(() => {
+      try {
+        liveCount(local, (n) => setCount(n));
+      } catch {
+        setCount(0);
+      }
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [open, local, liveCount]);
 
   const handleApply = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
@@ -136,9 +155,11 @@ export function FilterSheet({
           <View className="flex-[2]">
             <Button
               label={
-                count === 0
-                  ? "Nenhum resultado"
-                  : `Ver ${count} ${count === 1 ? "resultado" : "resultados"}`
+                count === null
+                  ? "Ver resultados"
+                  : count === 0
+                    ? "Nenhum resultado"
+                    : `Ver ${count} ${count === 1 ? "resultado" : "resultados"}`
               }
               variant="primary"
               size="md"

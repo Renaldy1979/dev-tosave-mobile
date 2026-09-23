@@ -68,10 +68,19 @@ async function share(message: string): Promise<boolean> {
   // 2) share sheet nativo
   try {
     const result = await Share.share({ message });
-    return result.action !== Share.dismissedAction;
+    // `dismissedAction` é o usuário cancelando — não é erro.
+    return result.action === Share.sharedAction;
   } catch {
     return false;
   }
+}
+
+/**
+ * Helper exportado para a UI (ex.: menu de long-press da Coleção)
+ * acionar o mesmo fluxo de compartilhamento sem renderizar o botão.
+ */
+export async function shareCar(car: CarData): Promise<boolean> {
+  return share(buildMessage(car));
 }
 
 export function ShareWhatsAppButton({

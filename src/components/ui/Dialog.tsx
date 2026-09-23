@@ -52,7 +52,7 @@ export function Dialog({
   dismissable = true,
 }: Props) {
   const insets = useSafeAreaInsets();
-  const { c } = useTheme();
+  const { c, scheme } = useTheme();
   const opacity = useSharedValue(0);
   const scale = useSharedValue(0.96);
 
@@ -97,7 +97,7 @@ export function Dialog({
       statusBarTranslucent
       onRequestClose={dismissable ? onClose : undefined}
     >
-      <ThemeScope>
+      <ThemeScope scheme={scheme}>
         <View
           style={{ paddingTop: insets.top, paddingBottom: insets.bottom }}
           className="flex-1 items-center justify-center bg-overlay/70"

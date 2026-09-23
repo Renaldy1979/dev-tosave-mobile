@@ -46,7 +46,7 @@ export function InfoRow({
 }: Props) {
   const { c } = useTheme();
   const { show } = useToast();
-  const tappable = Boolean(onPress);
+  const tappable = Boolean(onPress) || copyable;
 
   const handleCopy = async () => {
     if (!value) return;

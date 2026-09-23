@@ -64,6 +64,9 @@ export function useToast(): ToastContextValue {
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [current, setCurrent] = useState<InternalToast | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // `id` do Toast atual; usado para evitar que o `setTimeout` de hide
+  // antigo limpe um Toast novo (item 32 da revisão).
+  const currentId = useRef(0);
   const counter = useRef(0);
   const offsetY = useSharedValue(-16);
   const opacity = useSharedValue(0);
@@ -73,17 +76,23 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       clearTimeout(timer.current);
       timer.current = null;
     }
+    const snapshotId = currentId.current;
     opacity.value = withTiming(0, { duration: duration.fast, easing: easing.out });
     offsetY.value = withTiming(-16, { duration: duration.fast, easing: easing.out }, (done) => {
       if (done) cancelAnimation(offsetY);
     });
-    setTimeout(() => setCurrent(null), duration.fast + 20);
+    setTimeout(() => {
+      // Só limpa se ainda for o mesmo Toast — protege contra a chegada
+      // de um `show()` durante a animação de saída.
+      if (currentId.current === snapshotId) setCurrent(null);
+    }, duration.fast + 20);
   }, [opacity, offsetY]);
 
   const show = useCallback(
     (toast: ToastInput) => {
       counter.current += 1;
       const id = counter.current;
+      currentId.current = id;
       const type = toast.type ?? "info";
       const lifetime = toast.durationMs ?? 4000;
       // Limpa timer anterior; novo substitui o anterior.

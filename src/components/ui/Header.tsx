@@ -256,6 +256,10 @@ function TransparentHeader({
   className?: string;
 }) {
   const { c } = useTheme();
+  // Resolve `c("border")` fora do worklet — Reanimated 4 trava se você
+  // chama uma função JS comum dentro do `useAnimatedStyle` (item 1 da
+  // revisão do lote 02).
+  const borderColor = c("border");
   const [isCollapsed, setIsCollapsed] = useState(false);
   // Sincroniza estado JS com o SharedValue da UI thread
   useEffect(() => {
@@ -269,7 +273,7 @@ function TransparentHeader({
 
   const barStyle = useAnimatedStyle(() => ({
     backgroundColor: collapse.value > 0.5 ? surfaceBg : "transparent",
-    borderBottomColor: collapse.value > 0.5 ? c("border") : "transparent",
+    borderBottomColor: collapse.value > 0.5 ? borderColor : "transparent",
   }));
   const titleStyle = useAnimatedStyle(() => ({
     opacity: collapse.value,

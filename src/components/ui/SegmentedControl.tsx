@@ -78,7 +78,7 @@ export function SegmentedControl<T extends string>({
     <View
       accessibilityRole="radiogroup"
       accessibilityLabel={accessibilityLabel}
-      className={cn("flex-row bg-surface-2 rounded-md p-1 h-11 relative", className)}
+      className={cn("flex-row bg-surface-2 rounded-md p-1 h-12 relative", className)}
       onLayout={onLayout}
     >
       <View
@@ -86,7 +86,7 @@ export function SegmentedControl<T extends string>({
         style={{
           position: "absolute",
           top: 4,
-          height: 44 - 8,
+          height: 48 - 8,
           left: animatedLeft,
           width: itemWidth,
           borderRadius: 6,
@@ -95,7 +95,7 @@ export function SegmentedControl<T extends string>({
           borderColor: c("border"),
         }}
       />
-      {options.map((option) => {
+      {options.map((option, idx) => {
         const active = option.value === value;
         const Icon = option.icon;
         return (
@@ -103,9 +103,9 @@ export function SegmentedControl<T extends string>({
             key={option.value}
             accessibilityRole="radio"
             accessibilityState={{ selected: active }}
-            accessibilityLabel={option.label}
+            accessibilityLabel={`${option.label}${active ? ", selecionado" : ""}, ${idx + 1} de ${options.length}`}
             onPress={() => onChange(option.value)}
-            className="flex-1 flex-row items-center justify-center gap-1.5 rounded-md active:opacity-80"
+            className="flex-1 flex-row items-center justify-center gap-1.5 rounded-md active:opacity-80 min-h-12"
           >
             {Icon ? (
               <Icon

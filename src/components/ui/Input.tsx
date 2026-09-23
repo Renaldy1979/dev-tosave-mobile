@@ -1,5 +1,6 @@
 import { forwardRef, useImperativeHandle, useRef, useState } from "react";
 import { AccessibilityInfo, TextInput, View } from "react-native";
+import { BottomSheetTextInput } from "@gorhom/bottom-sheet";
 import type { LucideIcon } from "lucide-react-native";
 import { AlertCircle, Eye, EyeOff } from "lucide-react-native";
 import type { TextInputProps } from "react-native";
@@ -28,6 +29,9 @@ type Props = {
   rightSlot?: React.ReactNode;
   variant?: "default" | "password" | "mono";
   className?: string;
+  /** Quando dentro de um BottomSheet do @gorhom, usar `BottomSheetTextInput`
+   *  para o teclado não cobrir os campos (item 29 da revisão). */
+  as?: "default" | "sheet";
 } & Omit<TextInputProps, "style">;
 
 export const Input = forwardRef<TextInput, Props>(function Input(
@@ -39,6 +43,7 @@ export const Input = forwardRef<TextInput, Props>(function Input(
     rightSlot,
     variant = "default",
     className,
+    as = "default",
     onFocus,
     onBlur,
     secureTextEntry,
@@ -100,7 +105,10 @@ export const Input = forwardRef<TextInput, Props>(function Input(
               <LeftIcon color={c("fg-subtle")} size={18} strokeWidth={1.75} />
             </View>
           ) : null}
-          <TextInput
+          {(() => {
+            const InputComponent: typeof TextInput = as === "sheet" ? (BottomSheetTextInput as unknown as typeof TextInput) : TextInput;
+            return (
+          <InputComponent
             ref={inputRef}
             {...rest}
             onFocus={(event) => {
@@ -120,6 +128,8 @@ export const Input = forwardRef<TextInput, Props>(function Input(
               isMono && "font-mono"
             )}
           />
+            );
+          })()}
           {isPassword ? (
             <IconButton
               icon={revealed ? EyeOff : Eye}

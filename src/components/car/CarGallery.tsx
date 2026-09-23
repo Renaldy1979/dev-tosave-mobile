@@ -98,6 +98,14 @@ export function CarGallery({ images, title }: Props) {
         open={viewerOpen}
         onClose={(last) => {
           setIndex(last);
+          // Rola o pager para o último índice visto (item 21 da revisão).
+          requestAnimationFrame(() => {
+            try {
+              listRef.current?.scrollToIndex({ index: last, animated: false });
+            } catch {
+              // ignore — getItemLayout ausente; sem scroll programático
+            }
+          });
           setViewerOpen(false);
         }}
       />
