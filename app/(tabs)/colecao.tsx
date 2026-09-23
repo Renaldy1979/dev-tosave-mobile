@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  ActivityIndicator,
   Pressable,
   RefreshControl,
   View,
@@ -18,21 +17,10 @@ import { useTheme } from "@/theme/ThemeProvider";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useDelayedFlag } from "@/hooks/useDelayedFlag";
 import { useGridColumns } from "@/hooks/useGridColumns";
-import {
-  getCollection,
-  getCollectionSummary,
-  removeFromCollection,
-  setCollectionQuantity,
-} from "@/services";
+import { useCollectionStore } from "@/hooks/useCollectionStore";
+import { getCollection, setCollectionQuantity } from "@/services";
 import { listBrands, listSeries } from "@/services";
-import type {
-  Brand,
-  Car,
-  CarListItem,
-  CollectionItemWithCar,
-  CollectionSummary,
-  Serie,
-} from "@/types";
+import type { Brand, Car, CarListItem, Serie } from "@/types";
 import { ScreenContainer } from "@/components/ui/ScreenContainer";
 import { Header } from "@/components/ui/Header";
 import { Text } from "@/components/ui/Text";
@@ -63,6 +51,9 @@ const SORT_OPTIONS: { value: SortOption; label: string }[] = [
  * Resumo (3 StatTiles) + busca + SegmentedControl (Todos | Repetidos)
  * + ordenação (BottomSheet) + grid 2 colunas com stepper glass no card.
  * Empty states oficiais + LoginGate quando não há sessão.
+ *
+ * Lê do store compartilhado (`useCollectionStore`) para ficar em
+ * sincronia com a TabBar e o coração dos cards das outras telas.
  */
 export default function Colecao() {
   const router = useRouter();
@@ -70,8 +61,10 @@ export default function Colecao() {
   const insets = useSafeAreaInsets();
   const { c } = useTheme();
   const { user } = useCurrentUser();
+  const collection = useCollectionStore();
   const { show } = useToast();
   const columns = useGridColumns();
+  const [refreshing, setRefreshing] = useState(false);
 
   const [term, setTerm] = useState<string>(params.q ?? "");
   const [debouncedTerm, setDebouncedTerm] = useState<string>(term);
@@ -84,46 +77,15 @@ export default function Colecao() {
   const [sort, setSort] = useState<SortOption>("recent");
   const [sortOpen, setSortOpen] = useState(false);
 
-  const [items, setItems] = useState<CollectionItemWithCar[]>([]);
-  const [summary, setSummary] = useState<CollectionSummary | null>(null);
-  const [loadState, setLoadState] = useState<"loading" | "ok" | "error" | "empty">("loading");
-  const [summaryState, setSummaryState] = useState<"loading" | "ok" | "error">("loading");
+  // Catálogo de carros e marcas/séries — só para resolver nomes
+  // e popular os cards.
+  const [cars, setCars] = useState<Car[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [series, setSeries] = useState<Serie[]>([]);
+  const [loadState, setLoadState] = useState<"loading" | "ok" | "error" | "empty">("loading");
   const showSkeleton = useDelayedFlag(loadState === "loading", 150);
-  const showSummarySkeleton = useDelayedFlag(summaryState === "loading", 150);
 
-  // Para o ConfirmDialog de remoção via stepper
-  const [confirmRemove, setConfirmRemove] = useState<{ car: Car; quantity: number } | null>(null);
-
-  // BottomSheet de long-press
-  const [sheet, setSheet] = useState<{ car: Car; quantity: number } | null>(null);
-
-  // ----- Carga -----
-  const load = useCallback(async () => {
-    if (!user) return;
-    setLoadState("loading");
-    setSummaryState("loading");
-    try {
-      const [list, sum] = await Promise.all([
-        getCollection(user.id, { q: debouncedTerm, duplicatesOnly }),
-        getCollectionSummary(user.id),
-      ]);
-      setItems(list);
-      setSummary(sum);
-      setLoadState(list.length === 0 ? "empty" : "ok");
-      setSummaryState("ok");
-    } catch {
-      setLoadState("error");
-      setSummaryState("error");
-    }
-  }, [user, debouncedTerm, duplicatesOnly]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  // Carrega marcas e séries (para resolver nome nos cards da Coleção).
+  // Carrega marcas e séries (cache leve para resolver nomes).
   useEffect(() => {
     void Promise.all([listBrands(), listSeries()])
       .then(([b, s]) => {
@@ -133,17 +95,35 @@ export default function Colecao() {
       .catch(() => undefined);
   }, []);
 
-  // Helper para resolver nomes
-  const brandNameOf = useCallback(
-    (id: string) => brands.find((b) => b.id === id)?.name ?? "",
-    [brands]
-  );
+  // Carrega carros para resolver nome/título nos cards.
+  const loadCars = useCallback(async () => {
+    if (!user) {
+      setCars([]);
+      setLoadState("ok");
+      return;
+    }
+    setLoadState("loading");
+    try {
+      const list = await getCollection(user.id);
+      // Resolver os carros via items
+      const carsResolved: Car[] = list.map((it) => it.car);
+      setCars(carsResolved);
+      setLoadState("ok");
+    } catch {
+      setLoadState("error");
+    }
+  }, [user]);
+
+  useEffect(() => {
+    void loadCars();
+  }, [loadCars]);
+
+  // Resolver nomes para cards.
+  const brandNameOf = useCallback((id: string) => brands.find((b) => b.id === id)?.name ?? "", [brands]);
   const serieTitleOf = useCallback(
     (id: string) => series.find((s) => s.id === id)?.title ?? "",
     [series]
   );
-
-  // Helper para montar CarListItem a partir de um Car do item
   const toListItem = useCallback(
     (car: Car): CarListItem => ({
       ...car,
@@ -153,9 +133,31 @@ export default function Colecao() {
     [brandNameOf, serieTitleOf]
   );
 
-  // ----- Ordenação -----
-  const sortedItems = useMemo(() => {
-    const arr = [...items];
+  // Lista filtrada (busca + repetidos) e ordenada.
+  const visibleItems = useMemo(() => {
+    const entries = Object.entries(collection.items)
+      .filter(([, q]) => q > 0)
+      .map(([carId, q]) => ({ carId, q }));
+    const map = new Map(cars.map((c) => [c.id, c]));
+    let arr = entries
+      .map((e) => {
+        const car = map.get(e.carId);
+        if (!car) return null;
+        return { car, q: e.q };
+      })
+      .filter((v): v is { car: Car; q: number } => v !== null);
+    if (debouncedTerm.trim()) {
+      const term = debouncedTerm.toLowerCase();
+      arr = arr.filter(
+        (e) =>
+          e.car.title.toLowerCase().includes(term) ||
+          e.car.toy.toLowerCase().includes(term) ||
+          e.car.collector.toLowerCase().includes(term)
+      );
+    }
+    if (duplicatesOnly) {
+      arr = arr.filter((e) => e.q > 1);
+    }
     switch (sort) {
       case "name":
         arr.sort((a, b) => a.car.title.localeCompare(b.car.title));
@@ -164,14 +166,18 @@ export default function Colecao() {
         arr.sort((a, b) => b.car.year - a.car.year);
         break;
       case "units":
-        arr.sort((a, b) => b.quantity - a.quantity);
+        arr.sort((a, b) => b.q - a.q);
         break;
       case "recent":
       default:
-        arr.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+        // Mock sem createdAt nos Car — cai para `year desc` como fallback.
+        arr.sort((a, b) => b.car.year - a.car.year);
     }
     return arr;
-  }, [items, sort]);
+  }, [cars, collection.items, debouncedTerm, duplicatesOnly, sort]);
+
+  const summary = collection.summary;
+  const collectionIsEmpty = collection.summary.totalItems === 0;
 
   // ----- Ações -----
   const handleChangeQuantity = useCallback(
@@ -181,116 +187,70 @@ export default function Colecao() {
         setConfirmRemove({ car, quantity: current });
         return;
       }
-      // Otimista
-      const prevItem = items.find((it) => it.carId === car.id);
-      if (!prevItem) return;
-      const previousQty = prevItem.quantity;
-      setItems((cur) =>
-        cur.map((it) =>
-          it.carId === car.id ? { ...it, quantity: next } : it
-        )
-      );
-      // Atualiza summary otimista
-      setSummary((cur) => {
-        if (!cur) return cur;
-        const delta = next - previousQty;
-        return {
-          ...cur,
-          totalItems: cur.totalItems + delta,
-          duplicates: cur.duplicates + (next > 1 ? 1 : 0) - (previousQty > 1 ? 1 : 0),
-        };
-      });
-      Haptics.selectionAsync().catch(() => undefined);
       try {
-        await setCollectionQuantity(user.id, car.id, next);
+        await collection.setQuantity(car.id, next);
       } catch {
-        // rollback
-        setItems((cur) =>
-          cur.map((it) =>
-            it.carId === car.id ? { ...it, quantity: previousQty } : it
-          )
-        );
-        setSummary((cur) => {
-          if (!cur) return cur;
-          const delta = previousQty - next;
-          return {
-            ...cur,
-            totalItems: cur.totalItems + delta,
-            duplicates: cur.duplicates + (previousQty > 1 ? 1 : 0) - (next > 1 ? 1 : 0),
-          };
-        });
         show({ type: "danger", message: "Não foi possível atualizar sua coleção." });
       }
     },
-    [user, items, show]
+    [user, collection, show]
   );
 
   const handleRemove = useCallback(
-    async (car: Car, quantity: number) => {
+    async (car: Car) => {
       if (!user) return;
-      const previousItem = items.find((it) => it.carId === car.id);
-      const previousQty = previousItem?.quantity ?? 0;
-      // Otimista
-      setItems((cur) => cur.filter((it) => it.carId !== car.id));
-      setSummary((cur) => {
-        if (!cur) return cur;
-        return {
-          totalItems: Math.max(0, cur.totalItems - previousQty),
-          totalModels: Math.max(0, cur.totalModels - 1),
-          duplicates: Math.max(0, cur.duplicates - (previousQty > 1 ? 1 : 0)),
-        };
-      });
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => undefined);
+      const previous = collection.items[car.id] ?? 0;
       try {
-        await removeFromCollection(user.id, car.id);
+        await collection.remove(car.id);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => undefined);
         show({
           type: "info",
           message: "Removida da sua coleção.",
           action: {
             label: "Desfazer",
             onPress: async () => {
-              await setCollectionQuantity(user.id, car.id, previousQty);
-              await load();
+              await setCollectionQuantity(user.id, car.id, previous);
+              await collection.refresh();
             },
           },
         });
       } catch {
-        // rollback
-        setItems((cur) => {
-          if (!previousItem) return cur;
-          if (cur.some((it) => it.carId === car.id)) return cur;
-          return [...cur, previousItem];
-        });
-        setSummary((cur) => {
-          if (!cur) return cur;
-          return {
-            totalItems: cur.totalItems + previousQty,
-            totalModels: cur.totalModels + 1,
-            duplicates: cur.duplicates + (previousQty > 1 ? 1 : 0),
-          };
-        });
         show({ type: "danger", message: "Não foi possível atualizar sua coleção." });
       }
       setConfirmRemove(null);
     },
-    [user, items, show, load]
+    [user, collection, show]
   );
 
-  const handleLongPress = useCallback(
-    (car: Car, quantity: number) => {
-      Haptics.selectionAsync().catch(() => undefined);
-      setSheet({ car, quantity });
-    },
-    []
-  );
+  // ConfirmDialog state
+  const [confirmRemove, setConfirmRemove] = useState<{ car: Car; quantity: number } | null>(null);
 
-  // ----- Header scrollY -----
+  // Long-press sheet
+  const [sheet, setSheet] = useState<{ car: Car; quantity: number } | null>(null);
+
+  const handleLongPress = useCallback((car: Car, quantity: number) => {
+    Haptics.selectionAsync().catch(() => undefined);
+    setSheet({ car, quantity });
+  }, []);
+
+  const refresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([collection.refresh(), loadCars()]);
+    } catch {
+      show({ type: "danger", message: "Não foi possível atualizar." });
+    } finally {
+      setRefreshing(false);
+    }
+  }, [collection, loadCars, show]);
+
+  // Header scrollY
   const scrollY = useSharedValue(0);
   const scrollHandler = useAnimatedScrollHandler((event) => {
     scrollY.value = event.contentOffset.y;
   });
 
-  // ----- LoginGate -----
+  // LoginGate
   if (!user) {
     return (
       <ScreenContainer bg="bg" edges={["bottom"]} className="bg-bg">
@@ -304,9 +264,8 @@ export default function Colecao() {
     );
   }
 
-  // ----- Sub-título -----
   const subTitle =
-    summary && summary.totalItems > 0
+    summary.totalItems > 0
       ? `${summary.totalItems} ${summary.totalItems === 1 ? "miniatura" : "miniaturas"} · ${summary.totalModels} ${summary.totalModels === 1 ? "modelo" : "modelos"}`
       : undefined;
 
@@ -324,52 +283,35 @@ export default function Colecao() {
         scrollEventThrottle={16}
         contentContainerStyle={{ paddingBottom: bottomPadding }}
         refreshControl={
-          <RefreshControl tintColor={c("primary")} refreshing={false} onRefresh={load} />
+          <RefreshControl tintColor={c("primary")} refreshing={refreshing} onRefresh={refresh} />
         }
       >
         {/* Resumo StatTiles (esconde quando vazio, per spec) */}
-        {!showSkeleton || loadState !== "empty" ? (
+        {!collectionIsEmpty ? (
           <View className="px-4 mt-3">
             <View className="rounded-lg bg-surface border border-border p-3 flex-row">
-              {showSummarySkeleton && summaryState === "loading" ? (
-                <>
-                  <StatTileSkeleton />
-                  <StatTileSkeleton />
-                  <StatTileSkeleton />
-                </>
-              ) : summary ? (
-                <>
-                  <StatTile
-                    value={summary.totalItems}
-                    label="Itens"
-                    accessibilityLabel={`${summary.totalItems} itens na coleção`}
-                  />
-                  <StatTile
-                    value={summary.totalModels}
-                    label="Modelos"
-                    accessibilityLabel={`${summary.totalModels} modelos na coleção`}
-                  />
-                  <StatTile
-                    value={summary.duplicates}
-                    label="Repetid."
-                    onPress={() => router.setParams({ dup: duplicatesOnly ? undefined : "1" })}
-                    accessibilityLabel={`${summary.duplicates} modelos repetidos, toque para filtrar`}
-                  />
-                </>
-              ) : (
-                <ErrorState
-                  size="sm"
-                  title="Resumo indisponível."
-                  onRetry={load}
-                  className="flex-1"
-                />
-              )}
+              <StatTile
+                value={summary.totalItems}
+                label="Itens"
+                accessibilityLabel={`${summary.totalItems} itens na coleção`}
+              />
+              <StatTile
+                value={summary.totalModels}
+                label="Modelos"
+                accessibilityLabel={`${summary.totalModels} modelos na coleção`}
+              />
+              <StatTile
+                value={summary.duplicates}
+                label="Repetid."
+                onPress={() => router.setParams({ dup: duplicatesOnly ? undefined : "1" })}
+                accessibilityLabel={`${summary.duplicates} modelos repetidos, toque para filtrar`}
+              />
             </View>
           </View>
         ) : null}
 
-        {/* Busca + Filtro Todos | Repetidos + Ordenação (somente quando há itens) */}
-        {loadState !== "empty" && loadState !== "loading" ? (
+        {/* Busca + Filtro Todos | Repetidos + Ordenação */}
+        {!collectionIsEmpty && !showSkeleton ? (
           <View className="px-4 mt-4 gap-3">
             <SearchBar
               value={term}
@@ -383,7 +325,7 @@ export default function Colecao() {
                     { value: "all", label: "Todos" },
                     {
                       value: "dup",
-                      label: `Repetidos${summary && summary.duplicates > 0 ? ` · ${summary.duplicates}` : ""}`,
+                      label: `Repetidos${summary.duplicates > 0 ? ` · ${summary.duplicates}` : ""}`,
                     },
                   ]}
                   value={duplicatesOnly ? "dup" : "all"}
@@ -407,13 +349,12 @@ export default function Colecao() {
           </View>
         ) : null}
 
-        {/* Conteúdo (lista / skeleton / empty / error) */}
+        {/* Conteúdo */}
         {showSkeleton ? (
           <View className="px-3 mt-4">
             <CarGridSkeleton numColumns={columns} />
           </View>
-        ) : loadState === "empty" && summary && summary.totalItems === 0 ? (
-          // coleção vazia — esconde controles
+        ) : collectionIsEmpty ? (
           <View className="px-8 pt-8 items-center">
             <EmptyState
               kind="no-cars"
@@ -424,54 +365,51 @@ export default function Colecao() {
               }}
             />
           </View>
-        ) : loadState === "empty" ? (
-          // filtro "repetidos" sem itens
-          <View className="px-8 pt-8 items-center">
-            <EmptyState
-              kind="no-cars"
-              action={{
-                label: "Ver todos",
-                onPress: () => router.setParams({ dup: undefined }),
-              }}
-            />
-          </View>
         ) : loadState === "error" ? (
           <View className="py-12">
-            <ErrorState onRetry={load} />
+            <ErrorState onRetry={loadCars} />
+          </View>
+        ) : visibleItems.length === 0 ? (
+          // filtro "repetidos" ou busca sem itens
+          <View className="px-8 py-8 items-center">
+            <EmptyState
+              kind="no-cars"
+              description={
+                debouncedTerm.trim()
+                  ? "Tente outro termo ou limpe a busca."
+                  : undefined
+              }
+              action={
+                duplicatesOnly
+                  ? { label: "Ver todos", onPress: () => router.setParams({ dup: undefined }) }
+                  : debouncedTerm.trim()
+                    ? { label: "Limpar busca", onPress: () => setTerm("") }
+                    : undefined
+              }
+            />
           </View>
         ) : (
-          <View className="mt-4">
-            {debouncedTerm && sortedItems.length === 0 ? (
-              <View className="px-8 py-8 items-center">
-                <EmptyState
-                  kind="no-cars"
-                  description="Tente outro termo ou limpe a busca."
-                  action={{
-                    label: "Limpar busca",
-                    onPress: () => setTerm(""),
-                  }}
-                />
-              </View>
-            ) : (
-              <FlashList
-                data={sortedItems}
-                numColumns={columns}
-                keyExtractor={(item) => item.id}
-                contentContainerStyle={{ paddingHorizontal: 12 }}
-                renderItem={({ item }) => (
-                  <View style={{ width: `${100 / columns}%`, paddingHorizontal: 4 }}>
-                    <CarCard
-                      car={toListItem(item.car)}
-                      variant="collection"
-                      quantity={item.quantity}
-                      onPress={() => router.push(`/car/${item.car.id}`)}
-                      onChangeQuantity={(next) => handleChangeQuantity(item.car, item.quantity, next)}
-                      onRemoveRequest={() => setConfirmRemove({ car: item.car, quantity: item.quantity })}
-                    />
-                  </View>
-                )}
-              />
-            )}
+          <View className="mt-4 px-1">
+            <FlashList
+              data={visibleItems}
+              numColumns={columns}
+              keyExtractor={(item) => item.car.id}
+              contentContainerStyle={{ paddingHorizontal: 12, gap: 12 }}
+              renderItem={({ item }) => (
+                <View style={{ width: `${100 / columns}%` }}>
+                  <CarCard
+                    car={toListItem(item.car)}
+                    variant="collection"
+                    quantity={item.q}
+                    onPress={() => router.push(`/car/${item.car.id}`)}
+                    onChangeQuantity={(next) => handleChangeQuantity(item.car, item.q, next)}
+                    onRemoveRequest={() =>
+                      setConfirmRemove({ car: item.car, quantity: item.q })
+                    }
+                  />
+                </View>
+              )}
+            />
           </View>
         )}
       </Animated.ScrollView>
@@ -554,7 +492,7 @@ export default function Colecao() {
         }
         onConfirm={async () => {
           if (!confirmRemove) return;
-          await handleRemove(confirmRemove.car, confirmRemove.quantity);
+          await handleRemove(confirmRemove.car);
         }}
       />
     </ScreenContainer>

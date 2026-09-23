@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Dimensions, FlatList, Pressable, View, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
+import { Dimensions, FlatList, View, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
 import { router } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Heart, Share2, Layers } from "lucide-react-native";
+import { ScreenContainer } from "@/components/ui/ScreenContainer";
 import { Logo } from "@/components/ui/Logo";
 import { Text } from "@/components/ui/Text";
 import { Button } from "@/components/ui/Button";
@@ -48,6 +50,7 @@ const SLIDES: Slide[] = [
  * navegação (spec §2.4).
  */
 export default function Onboarding() {
+  const insets = useSafeAreaInsets();
   const [index, setIndex] = useState(0);
   const listRef = useRef<FlatList<Slide>>(null);
 
@@ -77,10 +80,13 @@ export default function Onboarding() {
   const isLast = index === SLIDES.length - 1;
 
   return (
-    <View className="flex-1 bg-ink" style={{ paddingTop: 48 }}>
+    <ScreenContainer bg="ink" edges={["bottom"]}>
       {/* Pular (canto superior direito) */}
-      {!isLast ? (
-        <View className="flex-row justify-end px-4">
+      <View
+        className="flex-row justify-end px-4"
+        style={{ paddingTop: insets.top + 8 }}
+      >
+        {!isLast ? (
           <Button
             label="Pular"
             variant="ghost"
@@ -89,8 +95,11 @@ export default function Onboarding() {
             accessibilityLabel="Pular onboarding"
             className="active:bg-white/10"
           />
-        </View>
-      ) : null}
+        ) : (
+          // Placeholder de mesma altura para evitar salto no último slide.
+          <View style={{ minHeight: 36 }} />
+        )}
+      </View>
 
       <FlatList
         ref={listRef}
@@ -103,10 +112,15 @@ export default function Onboarding() {
         getItemLayout={(_, i) => ({ length: SCREEN.width, offset: SCREEN.width * i, index: i })}
         renderItem={({ item }) => (
           <View style={{ width: SCREEN.width }} className="px-6">
-            <View className="items-center justify-center" style={{ height: SCREEN.height * 0.4, marginTop: 16 }}>
+            <View className="items-center justify-center" style={{ height: SCREEN.height * 0.45, marginTop: 16 }}>
               {item.illustration}
             </View>
-            <Text variant="display-lg" tone="ink" className="text-ink-fg mt-4">
+            <Text
+              variant="display-lg"
+              tone="ink"
+              className="text-ink-fg mt-4"
+              accessibilityRole="header"
+            >
               {item.title}
             </Text>
             <Text variant="body-lg" tone="ink" className="text-ink-fg/70 mt-2">
@@ -132,7 +146,7 @@ export default function Onboarding() {
       </View>
 
       {/* CTA */}
-      <View className="px-4 mt-8 mb-10">
+      <View className="px-6 mt-8" style={{ paddingBottom: Math.max(insets.bottom, 12) + 16 }}>
         <Button
           label={isLast ? "Começar" : "Próximo"}
           variant={isLast ? "flame" : "primary"}
@@ -141,7 +155,7 @@ export default function Onboarding() {
           onPress={() => (isLast ? finish() : goTo(index + 1))}
         />
       </View>
-    </View>
+    </ScreenContainer>
   );
 }
 

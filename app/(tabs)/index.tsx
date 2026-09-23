@@ -1,16 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Pressable, RefreshControl, View } from "react-native";
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, View } from "react-native";
 import { FlashList } from "@shopify/flash-list";
 import { useRouter } from "expo-router";
+import { ChevronRight } from "lucide-react-native";
+import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/theme/ThemeProvider";
 import { getSeriesCarCount, listCarsPaged, listSeries } from "@/services";
-import { addToCollection, getCollection, removeFromCollection } from "@/services/collection";
-import type { CarListItem, CollectionItemWithCar, Serie } from "@/types";
+import type { CarListItem, Serie } from "@/types";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useDelayedFlag } from "@/hooks/useDelayedFlag";
 import { useGridColumns } from "@/hooks/useGridColumns";
 import { useRequireSession } from "@/hooks/useRequireSession";
+import { useCollectionStore } from "@/hooks/useCollectionStore";
 import { ScreenContainer } from "@/components/ui/ScreenContainer";
 import { ThemeScope } from "@/components/ui/ThemeScope";
 import { Text } from "@/components/ui/Text";
@@ -20,11 +22,15 @@ import { SearchBar } from "@/components/ui/SearchBar";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { Avatar, deriveAvatarInitials } from "@/components/ui/Avatar";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { CarCard } from "@/components/car/CarCard";
-import { CarGridSkeleton } from "@/components/car/CarCardSkeleton";
+import { CarCardSkeleton } from "@/components/car/CarCardSkeleton";
 import { SeriesCard } from "@/components/car/SeriesCard";
+import { useToast } from "@/components/ui/Toast";
 
 const PAGE_SIZE = 20;
+const COL_GAP = 12;
 
 type SeriesState = "loading" | "ok" | "error" | "empty";
 type GridState = "loading" | "ok" | "error" | "empty" | "loadingMore";
@@ -40,6 +46,8 @@ export default function Home() {
   const router = useRouter();
   const { user, refresh: refreshUser } = useCurrentUser();
   const requireSession = useRequireSession();
+  const collection = useCollectionStore();
+  const { show } = useToast();
   const columns = useGridColumns();
   // A TabBar do expo-router tem 56 pt + inset inferior; somamos 24 de respiro.
   const insets = useSafeAreaInsets();
@@ -48,18 +56,14 @@ export default function Home() {
   const [series, setSeries] = useState<Serie[]>([]);
   const [seriesCount, setSeriesCount] = useState<Record<string, number>>({});
   const [seriesState, setSeriesState] = useState<SeriesState>("loading");
-  const [seriesError, setSeriesError] = useState<string | null>(null);
 
   const [cars, setCars] = useState<CarListItem[]>([]);
   const [carsTotal, setCarsTotal] = useState(0);
   const [carsPage, setCarsPage] = useState(1);
   const [gridState, setGridState] = useState<GridState>("loading");
   const [gridError, setGridError] = useState<string | null>(null);
-
-  // Mapa `carId → quantity` para o coração e o badge da TabBar
-  // ficarem coerentes sem precisar refazer fetch.
-  const [inCollection, setInCollection] = useState<Record<string, boolean>>({});
-  const [collectionCount, setCollectionCount] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const [confirmRemove, setConfirmRemove] = useState<CarListItem | null>(null);
 
   const showSeriesSkeleton = useDelayedFlag(seriesState === "loading", 150);
   const showCarsSkeleton = useDelayedFlag(gridState === "loading", 150);
@@ -67,7 +71,6 @@ export default function Home() {
   // ---------- Carga inicial ----------
   const loadSeries = useCallback(async () => {
     setSeriesState("loading");
-    setSeriesError(null);
     try {
       const [list, counts] = await Promise.all([
         listSeries({ featured: true }),
@@ -76,46 +79,28 @@ export default function Home() {
       setSeries(list);
       setSeriesCount(counts);
       setSeriesState(list.length === 0 ? "empty" : "ok");
-    } catch (err) {
-      setSeriesError(err instanceof Error ? err.message : "Erro ao carregar séries.");
+    } catch {
       setSeriesState("error");
     }
   }, []);
 
-  const loadCarsPage = useCallback(async (page: number, replace: boolean) => {
-    setGridState((prev) => (page === 1 ? "loading" : "loadingMore"));
-    setGridError(null);
-    try {
-      const result = await listCarsPaged({ page, pageSize: PAGE_SIZE });
-      setCars((prev) => (replace ? result.items : [...prev, ...result.items]));
-      setCarsTotal(result.total);
-      setCarsPage(result.page);
-      setGridState(result.items.length === 0 ? "empty" : "ok");
-    } catch (err) {
-      setGridError(err instanceof Error ? err.message : "Erro ao carregar.");
-      setGridState("error");
-    }
-  }, []);
-
-  // Coleção do usuário (apenas para o coração/badge).
-  const refreshCollection = useCallback(async () => {
-    if (!user) {
-      setInCollection({});
-      setCollectionCount(0);
-      return;
-    }
-    try {
-      const items = await getCollection(user.id);
-      const map: Record<string, boolean> = {};
-      items.forEach((it: CollectionItemWithCar) => {
-        map[it.carId] = it.quantity > 0;
-      });
-      setInCollection(map);
-      setCollectionCount(items.reduce((sum, it) => sum + it.quantity, 0));
-    } catch {
-      // Falha silenciosa — coração fica desabilitado no card.
-    }
-  }, [user]);
+  const loadCarsPage = useCallback(
+    async (page: number, replace: boolean) => {
+      setGridState((prev) => (page === 1 ? "loading" : "loadingMore"));
+      setGridError(null);
+      try {
+        const result = await listCarsPaged({ page, pageSize: PAGE_SIZE });
+        setCars((prev) => (replace ? result.items : [...prev, ...result.items]));
+        setCarsTotal(result.total);
+        setCarsPage(result.page);
+        setGridState(result.items.length === 0 ? "empty" : "ok");
+      } catch (err) {
+        setGridError(err instanceof Error ? err.message : "Erro ao carregar.");
+        setGridState("error");
+      }
+    },
+    []
+  );
 
   useEffect(() => {
     void loadSeries();
@@ -123,13 +108,21 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
-    void refreshCollection();
-  }, [refreshCollection]);
-
   const refreshAll = useCallback(async () => {
-    await Promise.all([loadSeries(), loadCarsPage(1, true), refreshCollection(), refreshUser()]);
-  }, [loadSeries, loadCarsPage, refreshCollection, refreshUser]);
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        loadSeries(),
+        loadCarsPage(1, true),
+        collection.refresh(),
+        refreshUser(),
+      ]);
+    } catch {
+      show({ type: "danger", message: "Não foi possível atualizar." });
+    } finally {
+      setRefreshing(false);
+    }
+  }, [loadSeries, loadCarsPage, collection, refreshUser, show]);
 
   // ---------- Interações ----------
   const handleEndReached = () => {
@@ -144,55 +137,84 @@ export default function Home() {
         requireSession({ intent: "add", carId: car.id });
         return;
       }
-      // Otimista
-      setInCollection((prev) => ({ ...prev, [car.id]: !prev[car.id] }));
-      setCollectionCount((prev) => prev + (inCollection[car.id] ? -1 : 1));
+      const wasIn = (collection.items[car.id] ?? 0) > 0;
+      const currentQty = collection.items[car.id] ?? 0;
+      // Se vai remover e quantity > 1, pede confirmação antes.
+      if (wasIn && currentQty > 1) {
+        setConfirmRemove(car);
+        return;
+      }
       try {
-        if (inCollection[car.id]) {
-          await removeFromCollection(user.id, car.id);
+        await collection.toggle(car.id);
+        if (!wasIn) {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
+          show({
+            type: "success",
+            message: "Adicionada à sua coleção.",
+            action: { label: "Ver", onPress: () => router.navigate("/colecao") },
+          });
         } else {
-          await addToCollection(user.id, car.id);
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => undefined);
         }
       } catch {
-        // rollback
-        setInCollection((prev) => ({ ...prev, [car.id]: !prev[car.id] }));
-        setCollectionCount((prev) => prev + (inCollection[car.id] ? 1 : -1));
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => undefined);
+        show({ type: "danger", message: "Não foi possível atualizar sua coleção." });
       }
     },
-    [user, requireSession, inCollection]
+    [user, collection, requireSession, show, router]
   );
+
+  const handleConfirmRemoveAll = useCallback(async () => {
+    if (!confirmRemove) return;
+    const car = confirmRemove;
+    const previousQty = collection.items[car.id] ?? 0;
+    setConfirmRemove(null);
+    try {
+      await collection.remove(car.id);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => undefined);
+      show({
+        type: "info",
+        message: `Removidas ${previousQty} unidades da sua coleção.`,
+        action: {
+          label: "Desfazer",
+          onPress: () => collection.setQuantity(car.id, previousQty).catch(() => undefined),
+        },
+      });
+    } catch {
+      show({ type: "danger", message: "Não foi possível atualizar sua coleção." });
+    }
+  }, [confirmRemove, collection, show]);
 
   const headerFirstName = useMemo(() => {
     if (!user?.name) return null;
     return user.name.split(" ")[0];
   }, [user]);
 
-  // Lista para o FlashList. Cada item é um CarCard; o header é uma
-  // faixa ink renderizada via `ListHeaderComponent`.
   const data = cars;
+  const collectionCount = collection.summary.totalItems;
 
   return (
-    <ScreenContainer bg="bg" edges={["bottom"]} className="bg-bg">
+    <ScreenContainer bg="bg" edges={["bottom"]} statusBar="light" className="bg-bg">
       <FlashList
         data={data}
         numColumns={columns}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={{ paddingBottom: bottomPadding }}
+        contentContainerStyle={{ paddingBottom: bottomPadding, gap: COL_GAP }}
         refreshControl={
           <RefreshControl
             tintColor={useTheme().c("primary")}
-            refreshing={false}
+            refreshing={refreshing}
             onRefresh={refreshAll}
           />
         }
         onEndReached={handleEndReached}
         onEndReachedThreshold={0.6}
         renderItem={({ item }) => (
-          <View style={{ width: `${100 / columns}%`, paddingHorizontal: 4 }}>
+          <View style={{ width: `${100 / columns}%`, paddingHorizontal: 0 }}>
             <CarCard
               car={item}
               variant="grid"
-              inCollection={Boolean(inCollection[item.id])}
+              inCollection={(collection.items[item.id] ?? 0) > 0}
               onPress={() => router.push(`/car/${item.id}`)}
               onToggleCollection={() => handleToggleCollection(item)}
             />
@@ -204,15 +226,14 @@ export default function Home() {
             seriesState={seriesState}
             series={series}
             seriesCount={seriesCount}
-            seriesError={seriesError}
-            showSeriesSkeleton={showSeriesSkeleton}
             onRetrySeries={loadSeries}
             onSearchPress={() => router.push("/busca?focus=1")}
             onSeriesPress={(id) => router.push(`/busca?serie=${id}`)}
-            onAllSeriesPress={() => router.push("/busca")}
+            onAllSeriesPress={() => router.push("/busca?open=serie")}
             onLoginPress={() => router.push("/login")}
             onAvatarPress={() => router.push("/perfil")}
             collectionCount={collectionCount}
+            showSeriesSkeleton={showSeriesSkeleton}
           />
         }
         ListFooterComponent={
@@ -220,13 +241,14 @@ export default function Home() {
             state={gridState}
             total={carsTotal}
             loaded={cars.length}
+            error={gridError}
             onRetry={() => loadCarsPage(carsPage + 1, false)}
           />
         }
         ListEmptyComponent={
           showCarsSkeleton ? (
             <View className="px-4 pt-2">
-              <CarGridSkeleton numColumns={columns} />
+              <SkeletonGrid columns={columns} />
             </View>
           ) : gridState === "empty" ? (
             <EmptyState kind="no-cars" />
@@ -234,6 +256,17 @@ export default function Home() {
             <ErrorState onRetry={() => loadCarsPage(1, true)} />
           ) : null
         }
+      />
+      <ConfirmDialog
+        open={confirmRemove !== null}
+        onClose={() => setConfirmRemove(null)}
+        title={`Remover todas as ${collection.items[confirmRemove?.id ?? ""] ?? 0} unidades?`}
+        description={
+          confirmRemove
+            ? `${confirmRemove.title} sai completamente da sua coleção.`
+            : undefined
+        }
+        onConfirm={handleConfirmRemoveAll}
       />
     </ScreenContainer>
   );
@@ -248,8 +281,6 @@ function HomeHeader(props: {
   seriesState: SeriesState;
   series: Serie[];
   seriesCount: Record<string, number>;
-  seriesError: string | null;
-  showSeriesSkeleton: boolean;
   onRetrySeries: () => void;
   onSearchPress: () => void;
   onSeriesPress: (id: string) => void;
@@ -257,8 +288,10 @@ function HomeHeader(props: {
   onLoginPress: () => void;
   onAvatarPress: () => void;
   collectionCount: number;
+  showSeriesSkeleton: boolean;
 }) {
   const { c } = useTheme();
+  const { user } = useCurrentUser();
   return (
     <ThemeScope className="bg-ink">
       <View className="bg-ink px-4 pb-6">
@@ -268,17 +301,16 @@ function HomeHeader(props: {
           style={{ paddingTop: 48 }}
         >
           <Logo variant="dark" size="sm" />
-          {props.headerFirstName ? (
+          {user ? (
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Abrir perfil"
               onPress={props.onAvatarPress}
-              className="rounded-full items-center justify-center bg-primary-soft"
-              style={{ width: 32, height: 32 }}
+              hitSlop={12}
+              className="items-center justify-center"
+              style={{ width: 44, height: 44 }}
             >
-              <Text variant="body-sm" className="font-display text-primary-text">
-                {initials(props.headerFirstName)}
-              </Text>
+              <Avatar initials={deriveAvatarInitials(user.name)} size={32} />
             </Pressable>
           ) : (
             <Button
@@ -300,9 +332,7 @@ function HomeHeader(props: {
             </Text>
           ) : null}
           <Text variant="h2" tone="ink" className="text-ink-fg mt-0.5">
-            {props.headerFirstName
-              ? "O que vamos garimpar hoje?"
-              : "O que vamos garimpar hoje?"}
+            O que vamos garimpar hoje?
           </Text>
         </View>
 
@@ -330,11 +360,13 @@ function HomeHeader(props: {
                 accessibilityLabel="Ver todas as séries"
                 onPress={props.onAllSeriesPress}
                 hitSlop={12}
-                className="flex-row items-center"
+                style={{ minHeight: 44, minWidth: 44 }}
+                className="flex-row items-center pl-3 active:opacity-70"
               >
                 <Text variant="body-sm" tone="primary" className="font-sans-medium">
                   Ver tudo
                 </Text>
+                <ChevronRight color={c("primary-text")} size={16} strokeWidth={1.75} />
               </Pressable>
             </View>
             {props.seriesState === "loading" && props.showSeriesSkeleton ? (
@@ -343,7 +375,6 @@ function HomeHeader(props: {
               <ErrorState
                 size="sm"
                 title="Séries indisponíveis"
-                description={props.seriesError ?? undefined}
                 onRetry={props.onRetrySeries}
               />
             ) : (
@@ -351,9 +382,25 @@ function HomeHeader(props: {
             )}
           </View>
         ) : null}
+
+        {/* contador + primeira dobra */}
+        <View className="mt-6 px-1 flex-row items-baseline justify-between">
+          <Text variant="eyebrow" tone="subtle">
+            MINIATURAS
+          </Text>
+          <Text variant="caption" tone="muted">
+            {props.collectionCount} {props.collectionCount === 1 ? "na coleção" : "na sua coleção"}
+          </Text>
+        </View>
       </View>
       {/* linha flame na base da faixa ink */}
-      <View className="h-0.5" style={{ backgroundColor: "#FF3838", opacity: 0.3 }} />
+      <View
+        className="h-0.5"
+        style={{
+          backgroundColor: c("flame"),
+          opacity: 0.3,
+        }}
+      />
     </ThemeScope>
   );
 }
@@ -371,35 +418,72 @@ function SeriesRail({
   counts: Record<string, number>;
   onPress: (id: string) => void;
 }) {
-  return (
-    <View>
-      <View className="flex-row gap-3">
-        {series.map((s) => (
-          <SeriesCard
-            key={s.id}
-            id={s.id}
-            title={s.title}
-            description={s.description}
-            image={s.imagem}
-            carCount={counts[s.id] ?? 0}
-            onPress={() => onPress(s.id)}
-          />
-        ))}
+  const isSingle = series.length <= 1;
+  if (isSingle) {
+    return (
+      <View className="px-4">
+        <SeriesCard
+          id={series[0].id}
+          title={series[0].title}
+          description={series[0].description}
+          image={series[0].imagem}
+          carCount={counts[series[0].id] ?? 0}
+          onPress={() => onPress(series[0].id)}
+        />
       </View>
-    </View>
+    );
+  }
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      snapToInterval={292}
+      decelerationRate="fast"
+      contentContainerStyle={{ paddingHorizontal: 16, gap: 12 }}
+    >
+      {series.map((s) => (
+        <SeriesCard
+          key={s.id}
+          id={s.id}
+          title={s.title}
+          description={s.description}
+          image={s.imagem}
+          carCount={counts[s.id] ?? 0}
+          onPress={() => onPress(s.id)}
+        />
+      ))}
+    </ScrollView>
   );
 }
 
 function SeriesRailSkeleton() {
+  const { c } = useTheme();
   return (
-    <View className="flex-row gap-3">
-      {[0, 1].map((i) => (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={{ paddingHorizontal: 16, gap: 12 }}
+    >
+      {[0, 1, 2].map((i) => (
         <View
           key={i}
-          className="rounded-lg bg-white/5"
-          style={{ width: 280, height: 160 }}
-        >
-          <Skeleton.Rect style={{ height: 14, width: 70, margin: 12 }} />
+          className="rounded-lg border border-white/5"
+          style={{ width: 280, height: 160, backgroundColor: c("surface-3"), opacity: 0.6 }}
+        />
+      ))}
+    </ScrollView>
+  );
+}
+
+function SkeletonGrid({ columns }: { columns: number }) {
+  const count = columns === 1 ? 4 : 6;
+  return (
+    <View className="flex-row flex-wrap" style={{ gap: COL_GAP }}>
+      {Array.from({ length: count }).map((_, i) => (
+        <View key={i} style={{ width: `${100 / columns}%`, paddingHorizontal: 0 }}>
+          <View style={{ marginRight: i % columns === columns - 1 ? 0 : COL_GAP }}>
+            <CarCardSkeleton />
+          </View>
         </View>
       ))}
     </View>
@@ -410,26 +494,31 @@ function GridFooter({
   state,
   total,
   loaded,
+  error,
   onRetry,
 }: {
   state: GridState;
   total: number;
   loaded: number;
+  error?: string | null;
   onRetry: () => void;
 }) {
   const { c } = useTheme();
   if (state === "loading" || state === "empty") return null;
-  if (loaded >= total) {
-    return (
-      <Text variant="caption" tone="subtle" className="text-center mt-6 mb-2">
-        Você viu tudo.
-      </Text>
-    );
-  }
   if (state === "loadingMore") {
     return (
-      <View className="items-center py-4">
-        <ActivityIndicator color={c("primary")} size="small" />
+      <View className="px-4 mt-3">
+        <View className="flex-row" style={{ gap: COL_GAP }}>
+          <View style={{ flex: 1 }}>
+            <CarCardSkeleton />
+          </View>
+          <View style={{ flex: 1 }}>
+            <CarCardSkeleton />
+          </View>
+        </View>
+        <View className="items-center py-3">
+          <ActivityIndicator color={c("primary")} size="small" />
+        </View>
       </View>
     );
   }
@@ -437,17 +526,18 @@ function GridFooter({
     return (
       <View className="items-center gap-2 py-4">
         <Text variant="caption" tone="danger">
-          Não foi possível carregar mais.
+          {error ?? "Não foi possível carregar mais."}
         </Text>
         <Button label="Tentar novamente" variant="outline" size="sm" onPress={onRetry} />
       </View>
     );
   }
+  if (loaded >= total) {
+    return (
+      <Text variant="caption" tone="subtle" className="text-center mt-6 mb-2">
+        Você viu tudo.
+      </Text>
+    );
+  }
   return null;
-}
-
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }

@@ -1,25 +1,30 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  BackHandler,
   KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
+  TextInput,
   View,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { AlertCircle, Lock, Mail, X } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/theme/ThemeProvider";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useCollectionStore } from "@/hooks/useCollectionStore";
 import { addToCollection, getCollectionQuantity } from "@/services/collection";
 import { getDemoCredentials } from "@/services/auth";
 import { LogoCar } from "@/components/ui/Logo";
+import { ScreenContainer } from "@/components/ui/ScreenContainer";
 import { Text } from "@/components/ui/Text";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Logo } from "@/components/ui/Logo";
 import { IconButton } from "@/components/ui/IconButton";
-import { ThemeScope } from "@/components/ui/ThemeScope";
+import { useToast } from "@/components/ui/Toast";
 
 type LoginVariant = "add" | "colecao" | "perfil" | "default";
 
@@ -59,8 +64,11 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export default function Login() {
   const router = useRouter();
   const params = useLocalSearchParams<{ intent?: string; carId?: string; next?: string }>();
+  const insets = useSafeAreaInsets();
   const { c } = useTheme();
   const { user, signIn, refresh } = useCurrentUser();
+  const collectionStore = useCollectionStore();
+  const { show } = useToast();
 
   const variant: LoginVariant = useMemo(() => {
     if (params.intent === "add" && params.carId) return "add";
@@ -82,6 +90,7 @@ export default function Login() {
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [banner, setBanner] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const passwordRef = useRef<TextInput>(null);
 
   const validate = useCallback(
     (touched: { email: boolean; password: boolean }) => {
@@ -105,12 +114,27 @@ export default function Login() {
       return;
     }
     setSubmitting(true);
-    const result = await signIn(email.trim(), password);
+
+    // Bloqueia back enquanto envia.
+    const backSub = BackHandler.addEventListener("hardwareBackPress", () => true);
+
+    let result: Awaited<ReturnType<typeof signIn>> | null = null;
+    try {
+      result = await signIn(email.trim(), password);
+    } catch {
+      setBanner("Não foi possível entrar agora. Tente novamente.");
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => undefined);
+      setSubmitting(false);
+      backSub.remove();
+      return;
+    }
+
     if (!result.ok) {
       setBanner("E-mail ou senha incorretos.");
       setPassword("");
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => undefined);
       setSubmitting(false);
+      backSub.remove();
       return;
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
@@ -122,16 +146,23 @@ export default function Login() {
         const existing = await getCollectionQuantity(result.user.id, params.carId);
         if (existing === 0) {
           await addToCollection(result.user.id, params.carId);
+          // Sincroniza o store compartilhado da coleção.
+          await collectionStore.refresh();
+          show({ type: "success", message: "Adicionada à sua coleção." });
         }
       } catch {
-        // Mantém sessão ativa; UI depois mostra erro se for o caso.
+        show({ type: "danger", message: "Não foi possível atualizar sua coleção." });
       }
     }
 
     // Reavalia o estado para garantir.
     await refresh();
 
+    show({ type: "success", message: "Bem-vindo de volta." });
+
     // Fecha modal e, em seguida, navega para `next` se houver.
+    backSub.remove();
+    setSubmitting(false);
     router.back();
     if (params.next && params.next.startsWith("/") && params.next !== "/login") {
       // Pequeno delay para o back terminar antes do navigate.
@@ -139,7 +170,19 @@ export default function Login() {
         router.navigate(params.next as "/colecao" | "/perfil");
       }, 50);
     }
-  }, [validate, signIn, email, password, variant, params.carId, params.next, refresh, router]);
+  }, [
+    validate,
+    signIn,
+    email,
+    password,
+    variant,
+    params.carId,
+    params.next,
+    refresh,
+    router,
+    collectionStore,
+    show,
+  ]);
 
   const handleFillDemo = useCallback(async () => {
     const demo = await getDemoCredentials();
@@ -153,126 +196,163 @@ export default function Login() {
   const copy = COPY[variant];
 
   return (
-    <ThemeScope className="flex-1">
-      <View className="flex-1 bg-ink">
-        {/* topo ink: palco da logo + watermark */}
-        <View className="relative items-center justify-center overflow-hidden" style={{ height: 200 }}>
-          <View className="absolute" style={{ width: 400, height: 200, opacity: 0.06 }}>
-            <LogoCar width={400} />
-          </View>
-          <Logo variant="dark" size="md" />
-          {/* Fechar (canto superior esquerdo) */}
-          <View className="absolute top-3 left-3" style={{ paddingTop: 40 }}>
-            <IconButton
-              icon={X}
-              variant="glass"
-              size="md"
-              accessibilityLabel="Fechar"
-              onPress={() => router.back()}
-              disabled={submitting}
-            />
-          </View>
+    <ScreenContainer bg="ink" edges={["bottom"]} className="flex-1">
+      {/* topo ink: palco da logo + watermark */}
+      <View
+        className="relative items-center justify-center overflow-hidden"
+        style={{ height: "30%" }}
+      >
+        {/* gradiente radial primary/12 — encolhe com teclado via KeyboardAvoidingView */}
+        <View
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(253, 132, 1, 0.12)",
+            borderRadius: 9999,
+            transform: [{ scale: 1.4 }],
+            marginTop: -100,
+            marginLeft: -100,
+            marginRight: -100,
+          }}
+        />
+        {/* marca d'água a 140% da largura */}
+        <View className="absolute" style={{ width: "140%", opacity: 0.06 }}>
+          <LogoCar width={999} />
         </View>
-
-        {/* conteúdo do formulário */}
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          className="flex-1"
+        <View style={{ maxWidth: 440, width: "100%" }} className="items-center">
+          <Logo variant="dark" size="md" />
+        </View>
+        {/* Fechar (canto superior esquerdo) — no pageSheet do iOS, não leva inset superior */}
+        <View
+          className="absolute left-3"
+          style={{ top: Platform.OS === "ios" ? 8 : insets.top + 8 }}
         >
-          <ScrollView
-            contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 24 }}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-          >
-            <Text variant="display-lg" tone="ink" className="text-ink-fg">
-              {copy.title}
-            </Text>
-            <Text variant="body" tone="ink" className="text-ink-fg/70 mt-2">
-              {copy.body}
-            </Text>
-
-            <View className="mt-6 gap-4">
-              <Input
-                label="E-mail"
-                placeholder="voce@email.com"
-                value={email}
-                onChangeText={(t) => {
-                  setEmail(t);
-                  if (emailError) validate({ email: true, password: false });
-                }}
-                onBlur={() => validate({ email: true, password: false })}
-                error={emailError ?? undefined}
-                leftIcon={Mail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoComplete="email"
-                textContentType="username"
-                returnKeyType="next"
-                editable={!submitting}
-              />
-              <Input
-                label="Senha"
-                placeholder="••••••••"
-                value={password}
-                onChangeText={(t) => {
-                  setPassword(t);
-                  if (passwordError) validate({ email: false, password: true });
-                }}
-                onBlur={() => validate({ email: false, password: true })}
-                error={passwordError ?? undefined}
-                leftIcon={Lock}
-                variant="password"
-                autoComplete="password"
-                textContentType="password"
-                returnKeyType="go"
-                onSubmitEditing={handleSubmit}
-                editable={!submitting}
-              />
-            </View>
-
-            {/* banner de erro */}
-            {banner ? (
-              <View className="mt-4 rounded-md flex-row items-center gap-2 px-3 py-2.5 bg-flame-soft border" style={{ borderColor: "rgba(255,56,56,0.4)" }}>
-                <AlertCircle size={18} color={c("flame")} strokeWidth={1.75} />
-                <Text variant="body-sm" tone="flame">
-                  {banner}
-                </Text>
-              </View>
-            ) : null}
-
-            {/* CTA Entrar (flame) */}
-            <Button
-              label="Entrar"
-              variant="flame"
-              size="lg"
-              fullWidth
-              loading={submitting}
-              onPress={handleSubmit}
-              className="mt-6"
-            />
-
-            {/* dados de exemplo (DEV) */}
-            {__DEV__ ? (
-              <View className="mt-6 items-center">
-                <Text variant="caption" tone="ink" className="text-ink-fg/50 text-center">
-                  Ambiente de demonstração:{`\n`}use os dados de exemplo.
-                </Text>
-                <Pressable
-                  accessibilityRole="link"
-                  accessibilityLabel="Preencher dados de exemplo"
-                  onPress={handleFillDemo}
-                  className="mt-2"
-                  hitSlop={12}
-                >
-                  <Text variant="body-sm" tone="primary" className="font-sans-medium">
-                    Preencher dados de exemplo
-                  </Text>
-                </Pressable>
-              </View>
-            ) : null}
-          </ScrollView>
-        </KeyboardAvoidingView>
+          <IconButton
+            icon={X}
+            variant="glass"
+            size="md"
+            accessibilityLabel="Fechar"
+            onPress={() => router.back()}
+            disabled={submitting}
+          />
+        </View>
       </View>
-    </ThemeScope>
+
+      {/* conteúdo do formulário */}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        className="flex-1"
+      >
+        <ScrollView
+          contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 24, maxWidth: 440, width: "100%", alignSelf: "center" }}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <Text
+            variant="display-lg"
+            tone="ink"
+            className="text-ink-fg"
+            accessibilityRole="header"
+            accessibilityViewIsModal
+          >
+            {copy.title}
+          </Text>
+          <Text variant="body" tone="ink" className="text-ink-fg/70 mt-2">
+            {copy.body}
+          </Text>
+
+          <View className="mt-6 gap-4">
+            <Input
+              label="E-mail"
+              placeholder="voce@email.com"
+              value={email}
+              onChangeText={(t) => {
+                setEmail(t);
+                if (emailError) validate({ email: true, password: false });
+              }}
+              onBlur={() => validate({ email: true, password: false })}
+              error={emailError ?? undefined}
+              leftIcon={Mail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoComplete="email"
+              textContentType="username"
+              returnKeyType="next"
+              editable={!submitting}
+              autoFocus
+              onSubmitEditing={() => passwordRef.current?.focus()}
+            />
+            <Input
+              label="Senha"
+              placeholder="••••••••"
+              value={password}
+              onChangeText={(t) => {
+                setPassword(t);
+                if (passwordError) validate({ email: false, password: true });
+              }}
+              onBlur={() => validate({ email: false, password: true })}
+              error={passwordError ?? undefined}
+              leftIcon={Lock}
+              variant="password"
+              autoComplete="password"
+              textContentType="password"
+              returnKeyType="go"
+              onSubmitEditing={handleSubmit}
+              editable={!submitting}
+              ref={passwordRef}
+            />
+          </View>
+
+          {/* banner de erro */}
+          {banner ? (
+            <View
+              accessibilityLiveRegion="polite"
+              className="mt-4 rounded-md flex-row items-center gap-2 px-3 py-2.5 bg-flame-soft border"
+              style={{ borderColor: "rgba(255,56,56,0.4)" }}
+            >
+              <AlertCircle size={18} color={c("flame")} strokeWidth={1.75} />
+              <Text variant="body-sm" tone="flame">
+                {banner}
+              </Text>
+            </View>
+          ) : null}
+
+          {/* CTA Entrar (flame) */}
+          <Button
+            label="Entrar"
+            variant="flame"
+            size="lg"
+            fullWidth
+            loading={submitting}
+            onPress={handleSubmit}
+            disabled={submitting}
+            className="mt-6"
+          />
+
+          {/* dados de exemplo — sempre na fase 1 (decisão do Orquestrador) */}
+          <View className="mt-6 items-center">
+            <Text variant="caption" tone="ink" className="text-ink-fg/50 text-center">
+              Ambiente de demonstração:{`\n`}use os dados de exemplo.
+            </Text>
+            <Pressable
+              accessibilityRole="link"
+              accessibilityLabel="Preencher dados de exemplo"
+              onPress={handleFillDemo}
+              hitSlop={12}
+              className="mt-2 active:opacity-70"
+              style={{ minHeight: 44, justifyContent: "center" }}
+            >
+              <Text variant="body-sm" tone="primary" className="font-sans-medium">
+                Preencher dados de exemplo
+              </Text>
+            </Pressable>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </ScreenContainer>
   );
 }

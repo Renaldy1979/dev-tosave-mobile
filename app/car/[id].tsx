@@ -4,7 +4,6 @@ import {
   Pressable,
   RefreshControl,
   ScrollView,
-  Share,
   View,
 } from "react-native";
 import {
@@ -22,13 +21,10 @@ import { useTheme } from "@/theme/ThemeProvider";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useRequireSession } from "@/hooks/useRequireSession";
 import { useDelayedFlag } from "@/hooks/useDelayedFlag";
+import { useCollectionStore } from "@/hooks/useCollectionStore";
 import {
-  addToCollection,
   getCarById,
-  getCollectionQuantity,
   listBySeriePaged,
-  removeFromCollection,
-  setCollectionQuantity,
 } from "@/services";
 import { CarListItem, CarDetail } from "@/types";
 import { ScreenContainer } from "@/components/ui/ScreenContainer";
@@ -71,12 +67,14 @@ export default function CarDetalhe() {
   const [detail, setDetail] = useState<CarDetail | null>(null);
   const [loadState, setLoadState] = useState<"loading" | "ok" | "error" | "not-found">("loading");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [quantity, setQuantity] = useState(0);
   const [related, setRelated] = useState<CarListItem[]>([]);
   const [relatedState, setRelatedState] = useState<"loading" | "ok" | "error">("loading");
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
   const [isReadMoreShown, setIsReadMoreShown] = useState(false);
 
+  const collection = useCollectionStore();
+  // Lê a quantidade direto do store compartilhado (atualiza em tempo real).
+  const quantity = detail ? collection.items[detail.id] ?? 0 : 0;
   const showSkeleton = useDelayedFlag(loadState === "loading", 150);
   const inCollection = quantity > 0;
 
@@ -114,16 +112,6 @@ export default function CarDetalhe() {
   }, [load]);
 
   useEffect(() => {
-    if (!user || !detail) {
-      setQuantity(0);
-      return;
-    }
-    void getCollectionQuantity(user.id, detail.id)
-      .then((q) => setQuantity(q))
-      .catch(() => setQuantity(0));
-  }, [user, detail]);
-
-  useEffect(() => {
     if (!detail) {
       setRelated([]);
       return;
@@ -146,11 +134,8 @@ export default function CarDetalhe() {
       requireSession({ intent: "add", carId: detail?.id ?? "" });
       return;
     }
-    // Otimista
-    const previous = quantity;
-    setQuantity((q) => q + 1);
     try {
-      await addToCollection(user.id, detail.id);
+      await collection.toggle(detail.id);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
       show({
         type: "success",
@@ -158,39 +143,32 @@ export default function CarDetalhe() {
         action: { label: "Ver", onPress: () => router.navigate("/colecao") },
       });
     } catch {
-      setQuantity(previous);
       show({ type: "danger", message: "Não foi possível atualizar sua coleção." });
     }
-  }, [user, detail, quantity, requireSession, show, router]);
+  }, [user, detail, collection, requireSession, show, router]);
 
   const handleChangeQuantity = useCallback(
     async (next: number) => {
       if (!user || !detail) return;
-      const previous = quantity;
-      setQuantity(next);
       try {
-        await setCollectionQuantity(user.id, detail.id, next);
+        await collection.setQuantity(detail.id, next);
       } catch {
-        setQuantity(previous);
         show({ type: "danger", message: "Não foi possível atualizar sua coleção." });
       }
     },
-    [user, detail, quantity, show]
+    [user, detail, collection, show]
   );
 
   const handleRemove = useCallback(async () => {
     if (!user || !detail) return;
-    const previous = quantity;
-    setQuantity(0);
     try {
-      await removeFromCollection(user.id, detail.id);
+      await collection.remove(detail.id);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => undefined);
       show({ type: "info", message: "Removida da sua coleção." });
     } catch {
-      setQuantity(previous);
       show({ type: "danger", message: "Não foi possível atualizar sua coleção." });
     }
-  }, [user, detail, quantity, show]);
+  }, [user, detail, collection, show]);
 
   // ----- Dados derivados -----
   const images = useMemo(() => {
@@ -552,7 +530,3 @@ export default function CarDetalhe() {
     </ScreenContainer>
   );
 }
-
-// `Share` importado para o fallback do WhatsApp no futuro; mantemos o
-// import para evitar warning de "unused".
-void Share;

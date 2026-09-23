@@ -18,24 +18,21 @@ import { useTheme } from "@/theme/ThemeProvider";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useDelayedFlag } from "@/hooks/useDelayedFlag";
 import { useGridColumns } from "@/hooks/useGridColumns";
+import { useCollectionStore } from "@/hooks/useCollectionStore";
 import {
-  addToCollection,
   countCars,
-  getCollection,
   listAttributes,
   listBrands,
   listCars,
   listCarsPaged,
   listSeries,
   listYears,
-  removeFromCollection,
 } from "@/services";
 import type {
   Attribute,
   Brand,
   CarFilters,
   CarListItem,
-  CollectionItemWithCar,
   Serie,
 } from "@/types";
 import { ScreenContainer } from "@/components/ui/ScreenContainer";
@@ -46,7 +43,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { CarCard } from "@/components/car/CarCard";
-import { CarGridSkeleton } from "@/components/car/CarCardSkeleton";
+import { CarGridSkeleton, CarCardSkeleton } from "@/components/car/CarCardSkeleton";
 import { FilterChipsRow } from "@/components/ui/FilterChipsRow";
 import { FilterSheet, type FilterDraft } from "@/components/ui/FilterSheet";
 import { useRequireSession } from "@/hooks/useRequireSession";
@@ -227,28 +224,9 @@ export default function Busca() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [term, brands, series]);
 
-  // ----- Coleção (para o coração) -----
-  const [inCollection, setInCollection] = useState<Record<string, boolean>>({});
-  const refreshCollection = useCallback(async () => {
-    if (!user) {
-      setInCollection({});
-      return;
-    }
-    try {
-      const coll = await getCollection(user.id);
-      const map: Record<string, boolean> = {};
-      coll.forEach((it: CollectionItemWithCar) => {
-        map[it.carId] = it.quantity > 0;
-      });
-      setInCollection(map);
-    } catch {
-      // silencioso
-    }
-  }, [user]);
-
-  useEffect(() => {
-    void refreshCollection();
-  }, [refreshCollection]);
+  // ----- Coleção (store compartilhado) -----
+  const collection = useCollectionStore();
+  const isInCollection = (carId: string) => (collection.items[carId] ?? 0) > 0;
 
   // ----- Filtro sheet -----
   const [filterOpen, setFilterOpen] = useState(false);
@@ -314,21 +292,14 @@ export default function Busca() {
         requireSession({ intent: "add", carId: car.id });
         return;
       }
-      const previous = inCollection[car.id] ?? false;
-      setInCollection((prev) => ({ ...prev, [car.id]: !previous }));
       try {
-        if (previous) {
-          await removeFromCollection(user.id, car.id);
-        } else {
-          await addToCollection(user.id, car.id);
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
-        }
+        await collection.toggle(car.id);
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
       } catch {
-        setInCollection((prev) => ({ ...prev, [car.id]: previous }));
         show({ type: "danger", message: "Não foi possível atualizar sua coleção." });
       }
     },
-    [user, inCollection, requireSession, show]
+    [user, collection, requireSession, show]
   );
 
   // ----- Chips para FilterChipsRow -----
@@ -522,7 +493,7 @@ export default function Busca() {
                 <CarCard
                   car={exactToyMatch}
                   variant="row"
-                  inCollection={Boolean(inCollection[exactToyMatch.id])}
+                  inCollection={isInCollection(exactToyMatch.id)}
                   onPress={() => router.push(`/car/${exactToyMatch.id}`)}
                   onToggleCollection={() => handleToggleCollection(exactToyMatch)}
                 />
@@ -570,7 +541,7 @@ export default function Busca() {
                       <CarCard
                         car={item}
                         variant="grid"
-                        inCollection={Boolean(inCollection[item.id])}
+                        inCollection={isInCollection(item.id)}
                         onPress={() => router.push(`/car/${item.id}`)}
                         onToggleCollection={() => handleToggleCollection(item)}
                       />
@@ -776,8 +747,18 @@ function FooterState({
     );
   }
   return (
-    <View className="items-center py-4">
-      <ActivityIndicator color={c("primary")} size="small" />
+    <View className="px-4 mt-3">
+      <View className="flex-row" style={{ gap: 12 }}>
+        <View style={{ flex: 1 }}>
+          <CarCardSkeleton />
+        </View>
+        <View style={{ flex: 1 }}>
+          <CarCardSkeleton />
+        </View>
+      </View>
+      <View className="items-center py-3">
+        <ActivityIndicator color={c("primary")} size="small" />
+      </View>
     </View>
   );
 }

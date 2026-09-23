@@ -22,6 +22,7 @@ import { JetBrainsMono_500Medium } from "@expo-google-fonts/jetbrains-mono";
 import * as SplashScreen from "expo-splash-screen";
 import { ThemeProvider } from "@/theme/ThemeProvider";
 import { ToastProvider } from "@/components/ui/Toast";
+import { CollectionProvider } from "@/hooks/useCollectionStore";
 
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
@@ -51,27 +52,29 @@ export default function RootLayout() {
         <ThemeProvider>
           <BottomSheetModalProvider>
             <ToastProvider>
-              <StatusBar style="light" />
-              <Stack screenOptions={{ headerShown: false }}>
-                <Stack.Screen name="index" />
-                <Stack.Screen name="onboarding" />
-                <Stack.Screen
-                  name="login"
-                  options={{
-                    presentation: "modal",
-                    animation: "slide_from_bottom",
-                  }}
-                />
-                <Stack.Screen name="(tabs)" />
-                <Stack.Screen
-                  name="car/[id]"
-                  options={{
-                    animation: "slide_from_right",
-                    gestureEnabled: true,
-                    fullScreenGestureEnabled: true,
-                  }}
-                />
-              </Stack>
+              <CollectionProvider>
+                <StatusBar style="light" />
+                <Stack screenOptions={{ headerShown: false }}>
+                  <Stack.Screen name="index" />
+                  <Stack.Screen name="onboarding" />
+                  <Stack.Screen
+                    name="login"
+                    options={{
+                      presentation: "modal",
+                      animation: "slide_from_bottom",
+                    }}
+                  />
+                  <Stack.Screen name="(tabs)" />
+                  <Stack.Screen
+                    name="car/[id]"
+                    options={{
+                      animation: "slide_from_right",
+                      gestureEnabled: true,
+                      fullScreenGestureEnabled: true,
+                    }}
+                  />
+                </Stack>
+              </CollectionProvider>
             </ToastProvider>
           </BottomSheetModalProvider>
         </ThemeProvider>

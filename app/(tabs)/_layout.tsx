@@ -1,10 +1,8 @@
-import { useEffect, useState } from "react";
 import { Tabs, useRouter } from "expo-router";
 import { Heart, Home, LogIn, Search, User } from "lucide-react-native";
 import { useTheme } from "@/theme/ThemeProvider";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { getCollection } from "@/services/collection";
-import type { CollectionItemWithCar } from "@/types";
+import { useCollectionCount } from "@/hooks/useCollectionStore";
 
 /**
  * TabBar do expo-router (`componentes.md §6`).
@@ -12,7 +10,8 @@ import type { CollectionItemWithCar } from "@/types";
  * - Container `bg-ink` (ink nos dois temas).
  * - Perfil vira "Entrar" sem sessão (com `LogIn`).
  * - Coleção mostra o total de itens como badge nativo do expo-router
- *   (`tabBarBadge`), atualizado quando a coleção muda.
+ *   (`tabBarBadge`), atualizado quando a coleção muda (store compartilhado
+ *   em `useCollectionStore`).
  * - `tabPress` de Coleção/Perfil sem sessão: preventDefault + abre
  *   `/login` em modal com `next`. A tab ativa continua a mesma.
  */
@@ -20,26 +19,13 @@ export default function TabsLayout() {
   const { c } = useTheme();
   const { user } = useCurrentUser();
   const router = useRouter();
-  const [collectionCount, setCollectionCount] = useState(0);
-
-  useEffect(() => {
-    if (!user) {
-      setCollectionCount(0);
-      return;
-    }
-    void getCollection(user.id)
-      .then((items: CollectionItemWithCar[]) =>
-        items.reduce((sum, item) => sum + item.quantity, 0)
-      )
-      .then(setCollectionCount)
-      .catch(() => setCollectionCount(0));
-  }, [user]);
+  const collectionCount = useCollectionCount();
+  const badge = collectionCount > 99 ? "99+" : collectionCount > 0 ? collectionCount : undefined;
 
   return (
     <Tabs
       screenListeners={{
         tabPress: (event) => {
-          // `event.target` traz o id da rota (`index-0`, `perfil-0` etc.).
           const target = event.target ?? "";
           const name = target.split("-")[0];
           if ((name === "perfil" || name === "colecao") && !user) {
@@ -76,8 +62,12 @@ export default function TabsLayout() {
         name="colecao"
         options={{
           title: "Coleção",
+          tabBarAccessibilityLabel:
+            collectionCount > 0
+              ? `Coleção, ${collectionCount} ${collectionCount === 1 ? "item" : "itens"}`
+              : "Coleção",
           tabBarIcon: ({ color, size }) => <Heart color={color} size={size} strokeWidth={1.75} />,
-          tabBarBadge: collectionCount > 0 ? collectionCount : undefined,
+          tabBarBadge: badge,
         }}
       />
       <Tabs.Screen
