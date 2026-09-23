@@ -17,7 +17,7 @@ import { Badge } from "../ui/Badge";
 type Props = {
   id: string;
   title: string;
-  description: string;
+  description?: string;
   image: string | null;
   carCount: number;
   onPress: () => void;

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Pressable, View } from "react-native";
 import { Image } from "expo-image";
 import { Car } from "lucide-react-native";
@@ -49,7 +50,7 @@ export function CarCard({
   onRemoveRequest,
   accessibilityHint = "Abre os detalhes",
 }: Props) {
-  const { c } = useTheme();
+  const { c, scheme } = useTheme();
 
   if (variant === "row") {
     return (
@@ -80,9 +81,13 @@ export function CarCard({
 
   // ----- grid + collection variants -----
   const isCollection = variant === "collection";
-  const a11yLabel = `${car.title}, ${car.brandName}, ${car.year}, número ${car.collector}${
-    inCollection ? `, ${quantity} ${quantity === 1 ? "unidade" : "unidades"} na sua coleção` : ""
-  }`;
+  const collectionSuffix =
+    inCollection && quantity > 0
+      ? `, ${quantity} ${quantity === 1 ? "unidade" : "unidades"} na sua coleção`
+      : inCollection
+        ? ", na sua coleção"
+        : "";
+  const a11yLabel = `${car.title}, ${car.brandName}, ${car.year}, número ${car.collector}${collectionSuffix}`;
 
   return (
     <Pressable
@@ -94,7 +99,7 @@ export function CarCard({
       className={cn(
         "rounded-lg bg-surface border border-border overflow-hidden active:bg-surface-3"
       )}
-      style={{ elevation: 0 }}
+      style={scheme === "light" ? { elevation: 1 } : { elevation: 0 }}
     >
       <View className="relative">
         <CarStage uri={car.imagemThumb} className="aspect-card" />
@@ -131,8 +136,8 @@ export function CarCard({
           </View>
         ) : null}
       </View>
-      {/* corpo do card — altura fixa 76 pt para alinhar grid */}
-      <View className="p-3 gap-0.5" style={{ minHeight: 76 }}>
+      {/* corpo do card — altura fixa 94 pt para alinhar grid (decisão do Orquestrador) */}
+      <View className="p-3 gap-0.5" style={{ minHeight: 94 }}>
         <Text variant="eyebrow" tone="subtle" numberOfLines={1}>
           {car.brandName.toUpperCase()} · {car.year}
         </Text>
@@ -159,7 +164,8 @@ export function CarCard({
  */
 function CarStage({ uri, className }: { uri: string | null | undefined; className?: string }) {
   const { c } = useTheme();
-  if (!uri) {
+  const [failed, setFailed] = useState(false);
+  if (!uri || failed) {
     return (
       <View
         className={cn("aspect-card bg-surface-2 items-center justify-center", className)}
@@ -174,6 +180,7 @@ function CarStage({ uri, className }: { uri: string | null | undefined; classNam
       recyclingKey={uri}
       contentFit="cover"
       transition={200}
+      onError={() => setFailed(true)}
       className={cn("aspect-card bg-surface-2", className)}
     />
   );

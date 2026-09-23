@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { Pressable, View } from "react-native";
 import { Heart } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
@@ -14,13 +15,18 @@ import { useReducedMotion } from "@/hooks/useReducedMotion";
  * Pop 1 → 1.25 → 1 ao ativar, com glow vermelho via `shadowColor`.
  * Movimento reduzido: salta direto para o estado final, sem pop.
  *
+ * Toques repetidos são ignorados enquanto a `onToggle` está em curso.
+ * A animação + haptic só dispara após o toggle resolver com sucesso —
+ * sem sessão (handler do pai pede login) nenhum feedback de erro aparece
+ * aqui.
+ *
  * A ação de toggle é responsabilidade do chamador (handler de
  * adicionar/remover na coleção, com `useRequireSession` quando
  * sem sessão).
  */
 type Props = {
   active: boolean;
-  onToggle: () => void;
+  onToggle: () => void | Promise<void>;
   variant?: "glass" | "solid";
   size?: "sm" | "md" | "lg";
   accessibilityLabel?: string;
@@ -49,6 +55,7 @@ export function FavoriteButton({
   const { c } = useTheme();
   const reduced = useReducedMotion();
   const scale = useSharedValue(1);
+  const busyRef = useRef(false);
   const { box, icon } = VISUAL[size];
 
   const animatedStyle = useAnimatedStyle(() => ({
@@ -64,22 +71,30 @@ export function FavoriteButton({
       ? "#FFFFFF"
       : c("fg");
 
-  const handlePress = () => {
-    if (disabled) return;
-    onToggle();
-    if (active) {
-      // Remoção: pop suave
-      if (!reduced) {
-        scale.value = withSpring(1, { damping: 12, stiffness: 220 });
+  const handlePress = async () => {
+    if (disabled || busyRef.current) return;
+    busyRef.current = true;
+    try {
+      await onToggle();
+      // Sucesso: anima conforme o estado final (que o pai já refletiu).
+      if (active) {
+        // Remoção: pop suave
+        if (!reduced) {
+          scale.value = withSpring(1, { damping: 12, stiffness: 220 });
+        }
+      } else {
+        // Adição: pop 1 → 1.25 → 1 + haptic Light
+        if (!reduced) {
+          scale.value = withSpring(1.25, { damping: 14, stiffness: 240 }, () => {
+            scale.value = withSpring(1, { damping: 14, stiffness: 220 });
+          });
+        }
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
       }
-    } else {
-      // Adição: pop 1 → 1.25 → 1 + haptic Light
-      if (!reduced) {
-        scale.value = withSpring(1.25, { damping: 14, stiffness: 240 }, () => {
-          scale.value = withSpring(1, { damping: 14, stiffness: 220 });
-        });
-      }
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
+    } catch {
+      // pai já cuida do erro e do rollback; não anima.
+    } finally {
+      busyRef.current = false;
     }
   };
 

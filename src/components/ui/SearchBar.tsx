@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useTheme } from "@/theme/ThemeProvider";
 import { cn } from "@/utils/cn";
 import { IconButton } from "./IconButton";
+import { Text } from "./Text";
 
 /**
  * Barra de busca (`componentes.md §3`).
@@ -63,12 +64,13 @@ export function SearchBar({
         style={{ height: 44 }}
       >
         <Search color={iconColor} size={18} strokeWidth={1.75} />
-        <Pressable
-          accessibilityRole="text"
-          className={cn("flex-1 font-sans text-body", textClass, "opacity-80")}
+        <Text
+          variant="body"
+          className={cn("flex-1 font-sans opacity-80", textClass)}
+          numberOfLines={1}
         >
           {placeholder}
-        </Pressable>
+        </Text>
       </Pressable>
     );
   }

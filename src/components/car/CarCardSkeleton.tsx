@@ -10,7 +10,7 @@ export function CarCardSkeleton() {
   return (
     <View className="rounded-lg bg-surface border border-border overflow-hidden">
       <Skeleton.Rect className="aspect-card rounded-none" />
-      <View className="p-3 gap-1.5" style={{ minHeight: 76 }}>
+      <View className="p-3 gap-1.5" style={{ minHeight: 94 }}>
         <Skeleton.Rect style={{ height: 10, width: "40%" }} />
         <Skeleton.Rect style={{ height: 12, width: "90%" }} />
         <Skeleton.Rect style={{ height: 10, width: "60%" }} />
