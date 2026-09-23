@@ -6,26 +6,35 @@ import { cn } from "@/utils/cn";
 import { Text } from "../ui/Text";
 import { Badge } from "../ui/Badge";
 import { FavoriteButton } from "./FavoriteButton";
+import { QuantityStepper } from "../ui/QuantityStepper";
 import type { CarListItem } from "@/types";
 
 /**
  * CarCard (`componentes.md §4`).
  *
  * Variantes:
- * - `grid` → 2 colunas na Home/Busca. Imagem dominante, eyebrow
- *   "MARCA · ANO", título (2 linhas), caption da série, coração no
- *   canto superior direito.
- * - `row` → linha horizontal com thumb à esquerda + texto + coração.
+ * - `grid`       → 2 colunas na Home/Busca. Imagem dominante, eyebrow
+ *                  "MARCA · ANO", título (2 linhas), caption da série,
+ *                  coração no canto superior direito.
+ * - `row`        → linha horizontal com thumb à esquerda + texto +
+ *                  coração.
+ * - `collection` → mesmo grid, mas com `QuantityStepper glass` no
+ *                  canto e badge "Repetido ×N" quando `quantity > 1`.
+ *                  A subtração da última unidade abre
+ *                  `onRemoveRequest`.
  *
  * Dados vêm por prop (`car: CarListItem`) — o componente não conhece
  * os services.
  */
 type Props = {
   car: CarListItem;
-  variant?: "grid" | "row";
+  variant?: "grid" | "row" | "collection";
   inCollection?: boolean;
+  quantity?: number;
   onPress: () => void;
   onToggleCollection?: () => void;
+  onChangeQuantity?: (next: number) => void;
+  onRemoveRequest?: () => void;
   accessibilityHint?: string;
 };
 
@@ -33,8 +42,11 @@ export function CarCard({
   car,
   variant = "grid",
   inCollection = false,
+  quantity = 0,
   onPress,
   onToggleCollection,
+  onChangeQuantity,
+  onRemoveRequest,
   accessibilityHint = "Abre os detalhes",
 }: Props) {
   const { c } = useTheme();
@@ -66,9 +78,10 @@ export function CarCard({
     );
   }
 
-  // ----- grid variant -----
+  // ----- grid + collection variants -----
+  const isCollection = variant === "collection";
   const a11yLabel = `${car.title}, ${car.brandName}, ${car.year}, número ${car.collector}${
-    inCollection ? ", na sua coleção" : ""
+    inCollection ? `, ${quantity} ${quantity === 1 ? "unidade" : "unidades"} na sua coleção` : ""
   }`;
 
   return (
@@ -91,17 +104,24 @@ export function CarCard({
             #{car.collector}
           </Badge>
         </View>
-        {/* favorite — canto superior direito */}
-        {onToggleCollection ? (
-          <View className="absolute top-2 right-2">
+        {/* favorite / stepper — canto superior direito */}
+        <View className="absolute top-2 right-2">
+          {isCollection && onChangeQuantity ? (
+            <QuantityStepper
+              value={quantity}
+              variant="glass"
+              onChange={onChangeQuantity}
+              onRemoveRequest={onRemoveRequest}
+            />
+          ) : onToggleCollection ? (
             <FavoriteButton
               active={inCollection}
               onToggle={onToggleCollection}
               variant="glass"
               size="sm"
             />
-          </View>
-        ) : null}
+          ) : null}
+        </View>
         {/* serie position — canto inferior direito */}
         {car.seriePosition ? (
           <View className="absolute bottom-2 right-2">
@@ -119,9 +139,15 @@ export function CarCard({
         <Text variant="body-sm" className="font-sans-semibold" numberOfLines={2}>
           {car.title}
         </Text>
-        <Text variant="caption" tone="muted" numberOfLines={1}>
-          {car.serieTitle}
-        </Text>
+        {isCollection && quantity > 1 ? (
+          <Text variant="caption" tone="flame" className="font-sans-semibold mt-0.5">
+            Repetido ×{quantity}
+          </Text>
+        ) : (
+          <Text variant="caption" tone="muted" numberOfLines={1}>
+            {car.serieTitle}
+          </Text>
+        )}
       </View>
     </Pressable>
   );
