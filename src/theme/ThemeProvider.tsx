@@ -79,3 +79,43 @@ export function useTheme(): ThemeContextValue {
   if (!ctx) throw new Error("useTheme precisa estar dentro de <ThemeProvider>.");
   return ctx;
 }
+
+/**
+ * Reaplica `themeVars` numa subárvore com um `ThemeScope` que sobrescreve
+ * o `scheme` no contexto: tudo dentro de `ThemeScope` lê cores da surface
+ * indicada (ex.: superfícies ink sempre leem "dark", independente do tema
+ * global). É o que evita o ícone de olho do Input ficar invisível sobre
+ * ink no tema light.
+ *
+ * Quando não há `scheme` explícito, o pai já fornece o scheme "dark"
+ * — usado em portais (Modal/BottomSheet) que ficam fora da árvore raiz.
+ */
+type ScopeProps = {
+  scheme?: Scheme;
+  className?: string;
+  children: ReactNode;
+};
+
+export function ThemeScope({ scheme = "dark", className, children }: ScopeProps) {
+  const parent = useContext(ThemeContext);
+  const scopeValue = useMemo<ThemeContextValue>(
+    () => ({
+      // Mantém a preference global (Escuro/Claro/Sistema) — o usuário pode
+      // estar no tema "light" e mesmo assim a surface ink continua sendo
+      // "dark". Só o scheme resolto é forçado dentro do scope.
+      scheme,
+      preference: parent?.preference ?? "dark",
+      setPreference: parent?.setPreference ?? (() => undefined),
+      c: (name: Parameters<typeof color>[1], alpha = 1) => color(scheme, name, alpha),
+    }),
+    [scheme, parent?.preference, parent?.setPreference]
+  );
+
+  return (
+    <ThemeContext.Provider value={scopeValue}>
+      <View style={themeVars[scheme]} className={className}>
+        {children}
+      </View>
+    </ThemeContext.Provider>
+  );
+}
