@@ -1,13 +1,11 @@
-import { useState } from "react";
 import { Pressable, View } from "react-native";
-import { Image } from "expo-image";
-import { Car } from "lucide-react-native";
 import { useTheme } from "@/theme/ThemeProvider";
 import { cn } from "@/utils/cn";
 import { Text } from "../ui/Text";
 import { Badge } from "../ui/Badge";
 import { FavoriteButton } from "./FavoriteButton";
 import { QuantityStepper } from "../ui/QuantityStepper";
+import { CarImage } from "./CarImage";
 import type { CarListItem } from "@/types";
 
 /**
@@ -26,6 +24,10 @@ import type { CarListItem } from "@/types";
  *
  * Dados vêm por prop (`car: CarListItem`) — o componente não conhece
  * os services.
+ *
+ * `width` (grid/collection): largura fixa da coluna, calculada por
+ * `useGridLayout`. Todos os cards do grid ficam do mesmo tamanho; a
+ * imagem mantém `aspect-card` (4:3) e o corpo tem altura fixa.
  */
 type Props = {
   car: CarListItem;
@@ -38,6 +40,7 @@ type Props = {
   onChangeQuantity?: (next: number) => void;
   onRemoveRequest?: () => void;
   accessibilityHint?: string;
+  width?: number;
 };
 
 export function CarCard({
@@ -51,13 +54,18 @@ export function CarCard({
   onChangeQuantity,
   onRemoveRequest,
   accessibilityHint = "Abre os detalhes",
+  width,
 }: Props) {
-  const { c, scheme } = useTheme();
+  const { scheme } = useTheme();
 
   if (variant === "row") {
     return (
       <View className="flex-row items-center gap-3">
-        <CarStage uri={car.imagemThumb} className="rounded-md overflow-hidden" />
+        <CarImage
+          uri={car.imagemThumb}
+          className="aspect-card rounded-md overflow-hidden"
+          style={{ width: 96 }}
+        />
         <View className="flex-1 min-w-0">
           <Text variant="eyebrow" tone="subtle" numberOfLines={1}>
             {car.brandName.toUpperCase()} · {car.year}
@@ -102,10 +110,10 @@ export function CarCard({
       className={cn(
         "rounded-lg bg-surface border border-border overflow-hidden active:bg-surface-3"
       )}
-      style={scheme === "light" ? { elevation: 1 } : { elevation: 0 }}
+      style={[{ elevation: scheme === "light" ? 1 : 0 }, width ? { width } : null]}
     >
       <View className="relative">
-        <CarStage uri={car.imagemThumb} className="aspect-card" />
+        <CarImage uri={car.imagemThumb} className="w-full aspect-card" />
         {/* collector badge accent — canto superior esquerdo */}
         <View className="absolute top-2 left-2">
           <Badge variant="accent" size="sm">
@@ -140,7 +148,7 @@ export function CarCard({
         ) : null}
       </View>
       {/* corpo do card — altura fixa 94 pt para alinhar grid (decisão do Orquestrador) */}
-      <View className="p-3 gap-0.5" style={{ minHeight: 94 }}>
+      <View className="p-3 gap-0.5" style={{ height: 94 }}>
         <Text variant="eyebrow" tone="subtle" numberOfLines={1}>
           {car.brandName.toUpperCase()} · {car.year}
         </Text>
@@ -160,33 +168,5 @@ export function CarCard({
         )}
       </View>
     </Pressable>
-  );
-}
-
-/**
- * Palco da imagem com `expo-image` (cache em disco, transição
- * suave) e ícone `Car` de fallback quando a imagem falha ou não há.
- */
-function CarStage({ uri, className }: { uri: string | null | undefined; className?: string }) {
-  const { c } = useTheme();
-  const [failed, setFailed] = useState(false);
-  if (!uri || failed) {
-    return (
-      <View
-        className={cn("aspect-card bg-surface-2 items-center justify-center", className)}
-      >
-        <Car color={c("fg-subtle")} size={40} strokeWidth={1.75} opacity={0.4} />
-      </View>
-    );
-  }
-  return (
-    <Image
-      source={{ uri }}
-      recyclingKey={uri}
-      contentFit="cover"
-      transition={200}
-      onError={() => setFailed(true)}
-      className={cn("aspect-card bg-surface-2", className)}
-    />
   );
 }

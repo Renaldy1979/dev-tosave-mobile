@@ -8,7 +8,7 @@ import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from "react-native";
-import { Image } from "expo-image";
+import { CarImage } from "./CarImage";
 import { X } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/theme/ThemeProvider";
@@ -86,15 +86,12 @@ export function GalleryViewer({ images, initialIndex, open, onClose, title }: Pr
                 style={{ width: SCREEN.width, height: SCREEN.height }}
                 className="items-center justify-center"
               >
-                <Image
-                  source={{ uri: item.uri }}
-                  recyclingKey={item.uri}
+                <CarImage
+                  uri={item.uri}
                   style={{ width: SCREEN.width, height: SCREEN.height * 0.7 }}
                   contentFit="contain"
                   transition={150}
-                  accessibilityLabel={
-                    title ? `Foto de ${title}` : undefined
-                  }
+                  accessibilityLabel={title ? `Foto de ${title}` : undefined}
                 />
               </View>
             )}
@@ -157,10 +154,10 @@ export function GalleryViewer({ images, initialIndex, open, onClose, title }: Pr
                         borderColor: active ? c("primary") : "transparent",
                       }}
                     >
-                      <Image
-                        source={{ uri: img.uri }}
+                      <CarImage
+                        uri={img.uri}
                         style={{ width: "100%", height: "100%" }}
-                        contentFit="cover"
+                        placeholderScale="80%"
                         transition={150}
                       />
                     </Pressable>

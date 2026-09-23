@@ -1,10 +1,9 @@
 import { useRef, useState } from "react";
 import { Dimensions, FlatList, Pressable, View, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
-import { Image } from "expo-image";
-import { Car } from "lucide-react-native";
 import { useTheme } from "@/theme/ThemeProvider";
 import { Text } from "@/components/ui/Text";
 import { GalleryViewer } from "./GalleryViewer";
+import { CarImage, CarImagePlaceholder } from "./CarImage";
 
 /**
  * CarGallery (componentes.md §15.1).
@@ -39,12 +38,10 @@ export function CarGallery({ images, title }: Props) {
 
   if (total === 0) {
     return (
-      <View
-        className="w-full items-center justify-center bg-surface-2"
-        style={{ height: SCREEN.width * 0.75 }}
-      >
-        <Car color={c("fg-subtle")} size={56} strokeWidth={1.75} opacity={0.4} />
-      </View>
+      <CarImagePlaceholder
+        style={{ width: SCREEN.width, height: SCREEN.width * 0.75 }}
+        accessibilityLabel={title ? `${title}, sem foto` : "Sem foto"}
+      />
     );
   }
 
@@ -121,13 +118,7 @@ function PressableImage({ uri, onPress }: { uri: string; onPress: () => void }) 
       onPress={onPress}
       style={{ width: SCREEN.width, height: SCREEN.width * 0.75 }}
     >
-      <Image
-        source={{ uri }}
-        recyclingKey={uri}
-        style={{ width: SCREEN.width, height: SCREEN.width * 0.75 }}
-        contentFit="cover"
-        transition={200}
-      />
+      <CarImage uri={uri} style={{ width: SCREEN.width, height: SCREEN.width * 0.75 }} />
     </Pressable>
   );
 }

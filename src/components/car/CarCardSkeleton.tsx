@@ -1,16 +1,20 @@
 import { View } from "react-native";
 import { useTheme } from "@/theme/ThemeProvider";
 import { Skeleton } from "../ui/Skeleton";
+import { useGridLayout } from "@/hooks/useGridColumns";
 
 /**
  * Skeleton com a mesma geometria do CarCard `grid` para evitar
  * salto de layout quando o conteúdo chega.
  */
-export function CarCardSkeleton() {
+export function CarCardSkeleton({ width }: { width?: number }) {
   return (
-    <View className="rounded-lg bg-surface border border-border overflow-hidden">
-      <Skeleton.Rect className="aspect-card rounded-none" />
-      <View className="p-3 gap-1.5" style={{ minHeight: 94 }}>
+    <View
+      className="rounded-lg bg-surface border border-border overflow-hidden"
+      style={width ? { width } : undefined}
+    >
+      <Skeleton.Rect className="w-full aspect-card rounded-none" />
+      <View className="p-3 gap-1.5" style={{ height: 94 }}>
         <Skeleton.Rect style={{ height: 10, width: "40%" }} />
         <Skeleton.Rect style={{ height: 12, width: "90%" }} />
         <Skeleton.Rect style={{ height: 10, width: "60%" }} />
@@ -20,18 +24,20 @@ export function CarCardSkeleton() {
 }
 
 /**
- * Grade de 6 cards (3 linhas em celular) — preenche a primeira dobra
- * enquanto carrega. O `numColumns` é responsabilidade da tela.
+ * Grade de skeletons com a mesma geometria do grid real
+ * (`useGridLayout`), já com a margem lateral: a tela não põe `px`.
+ * Padrão: 3 linhas (primeira dobra); `rows={1}` para "carregando mais".
  */
-export function CarGridSkeleton({ numColumns = 2 }: { numColumns?: number }) {
-  // 6 cards → 3 linhas de 2 colunas.
-  const count = numColumns === 1 ? 4 : 6;
+export function CarGridSkeleton({ rows = 3 }: { rows?: number }) {
+  const { columns, itemWidth, side, gap } = useGridLayout();
+  const count = columns === 1 ? Math.max(rows, 2) : columns * rows;
   return (
-    <View className="flex-row flex-wrap gap-3">
+    <View
+      className="flex-row flex-wrap"
+      style={{ paddingHorizontal: side, columnGap: gap, rowGap: gap }}
+    >
       {Array.from({ length: count }).map((_, i) => (
-        <View key={i} style={{ width: "48%" }}>
-          <CarCardSkeleton />
-        </View>
+        <CarCardSkeleton key={i} width={itemWidth} />
       ))}
     </View>
   );

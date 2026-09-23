@@ -18,7 +18,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/theme/ThemeProvider";
 // useCurrentUser removido da Busca na fase 2 (app travado).
 import { useDelayedFlag } from "@/hooks/useDelayedFlag";
-import { useGridColumns } from "@/hooks/useGridColumns";
+import { useGridLayout } from "@/hooks/useGridColumns";
 import { useCollectionStore } from "@/hooks/useCollectionStore";
 import {
   countCars,
@@ -44,7 +44,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { CarCard } from "@/components/car/CarCard";
-import { CarGridSkeleton, CarCardSkeleton } from "@/components/car/CarCardSkeleton";
+import { CarGridSkeleton } from "@/components/car/CarCardSkeleton";
 import { FilterChipsRow } from "@/components/ui/FilterChipsRow";
 import { FilterSheet, type FilterDraft } from "@/components/ui/FilterSheet";
 // useRequireSession removido na fase 2 (app travado).
@@ -79,7 +79,7 @@ export default function Busca() {
   // `user` não é checado aqui — a Busca fica dentro do grupo (tabs),
   // protegido pelo Stack, então user está sempre presente.
   const { show } = useToast();
-  const columns = useGridColumns();
+  const grid = useGridLayout();
 
   // ----- Estado de busca -----
   const [term, setTerm] = useState<string>(params.q ?? "");
@@ -503,7 +503,7 @@ export default function Busca() {
       ) : (
         <FlashList
           data={items}
-          numColumns={columns}
+          numColumns={grid.columns}
           keyExtractor={(item) => item.id}
           contentContainerStyle={{ paddingBottom: bottomPadding }}
           onEndReached={handleEndReached}
@@ -573,11 +573,12 @@ export default function Busca() {
               ) : null}
             </View>
           }
-          renderItem={({ item }) => (
-            <View style={{ width: `${100 / columns}%`, paddingHorizontal: 4 }}>
+          renderItem={({ item, index }) => (
+            <View style={grid.cellStyle(index)}>
               <CarCard
                 car={item}
                 variant="grid"
+                width={grid.itemWidth}
                 inCollection={isInCollection(item.id)}
                 onPress={() => router.push(`/car/${item.id}`)}
                 onToggleCollection={() => handleToggleCollection(item)}
@@ -590,7 +591,6 @@ export default function Busca() {
               showSkeleton={showSkeleton}
               total={total}
               loaded={items.length}
-              columns={columns}
               hasFilters={activeFiltersTotal > 0 || term.trim().length > 0}
               onRetry={() => loadResults(null, true)}
               onClear={() => {
@@ -786,7 +786,6 @@ function ResultsFooter({
   showSkeleton,
   total,
   loaded,
-  columns,
   hasFilters,
   onRetry,
   onClear,
@@ -795,7 +794,6 @@ function ResultsFooter({
   showSkeleton: boolean;
   total: number;
   loaded: number;
-  columns: number;
   hasFilters: boolean;
   onRetry: () => void;
   onClear: () => void;
@@ -803,8 +801,8 @@ function ResultsFooter({
   const { c } = useTheme();
   if (showSkeleton) {
     return (
-      <View className="px-3 mt-3">
-        <CarGridSkeleton numColumns={columns} />
+      <View className="mt-3">
+        <CarGridSkeleton />
       </View>
     );
   }
@@ -843,15 +841,8 @@ function ResultsFooter({
   if (state === "ok" && loaded < total && loaded > 0) {
     // "Carregando mais"
     return (
-      <View className="px-4 mt-3">
-        <View className="flex-row" style={{ gap: 12 }}>
-          <View style={{ flex: 1 }}>
-            <CarCardSkeleton />
-          </View>
-          <View style={{ flex: 1 }}>
-            <CarCardSkeleton />
-          </View>
-        </View>
+      <View>
+        <CarGridSkeleton rows={1} />
         <View className="items-center py-3">
           <ActivityIndicator color={c("primary")} size="small" />
         </View>

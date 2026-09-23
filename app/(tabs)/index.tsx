@@ -10,7 +10,7 @@ import { getSeriesCarCount, listCarsPaged, listSeries } from "@/services";
 import type { CarListItem, Serie } from "@/types";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useDelayedFlag } from "@/hooks/useDelayedFlag";
-import { useGridColumns } from "@/hooks/useGridColumns";
+import { useGridLayout } from "@/hooks/useGridColumns";
 import { useCollectionStore } from "@/hooks/useCollectionStore";
 import { ScreenContainer } from "@/components/ui/ScreenContainer";
 import { ThemeScope } from "@/components/ui/ThemeScope";
@@ -24,12 +24,11 @@ import { ErrorState } from "@/components/ui/ErrorState";
 import { Avatar, deriveAvatarInitials } from "@/components/ui/Avatar";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { CarCard } from "@/components/car/CarCard";
-import { CarCardSkeleton } from "@/components/car/CarCardSkeleton";
+import { CarGridSkeleton } from "@/components/car/CarCardSkeleton";
 import { SeriesCard } from "@/components/car/SeriesCard";
 import { useToast } from "@/components/ui/Toast";
 
 const PAGE_SIZE = 20;
-const COL_GAP = 12;
 
 type SeriesState = "loading" | "ok" | "error" | "empty";
 type GridState = "loading" | "ok" | "error" | "empty" | "loadingMore";
@@ -46,7 +45,7 @@ export default function Home() {
   const { user, refresh: refreshUser } = useCurrentUser();
   const collection = useCollectionStore();
   const { show } = useToast();
-  const columns = useGridColumns();
+  const grid = useGridLayout();
   // A TabBar do expo-router tem 56 pt + inset inferior; somamos 24 de respiro.
   const insets = useSafeAreaInsets();
   const bottomPadding = 56 + insets.bottom + 24;
@@ -194,9 +193,9 @@ export default function Home() {
     <ScreenContainer bg="bg" edges={["bottom"]} statusBar="light" className="bg-bg">
       <FlashList
         data={data}
-        numColumns={columns}
+        numColumns={grid.columns}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={{ paddingBottom: bottomPadding, gap: COL_GAP }}
+        contentContainerStyle={{ paddingBottom: bottomPadding }}
         refreshControl={
           <RefreshControl
             tintColor={useTheme().c("primary")}
@@ -206,11 +205,12 @@ export default function Home() {
         }
         onEndReached={handleEndReached}
         onEndReachedThreshold={0.6}
-        renderItem={({ item }) => (
-          <View style={{ width: `${100 / columns}%`, paddingHorizontal: 0 }}>
+        renderItem={({ item, index }) => (
+          <View style={grid.cellStyle(index)}>
             <CarCard
               car={item}
               variant="grid"
+              width={grid.itemWidth}
               inCollection={(collection.items[item.id] ?? 0) > 0}
               onPress={() => router.push(`/car/${item.id}`)}
               onToggleCollection={() => handleToggleCollection(item)}
@@ -244,8 +244,8 @@ export default function Home() {
         }
         ListEmptyComponent={
           showCarsSkeleton ? (
-            <View className="px-4 pt-2">
-              <SkeletonGrid columns={columns} />
+            <View className="pt-2">
+              <CarGridSkeleton />
             </View>
           ) : gridState === "empty" ? (
             <EmptyState kind="no-cars" />
@@ -479,21 +479,6 @@ function SeriesRailSkeleton() {
   );
 }
 
-function SkeletonGrid({ columns }: { columns: number }) {
-  const count = columns === 1 ? 4 : 6;
-  return (
-    <View className="flex-row flex-wrap" style={{ gap: COL_GAP }}>
-      {Array.from({ length: count }).map((_, i) => (
-        <View key={i} style={{ width: `${100 / columns}%`, paddingHorizontal: 0 }}>
-          <View style={{ marginRight: i % columns === columns - 1 ? 0 : COL_GAP }}>
-            <CarCardSkeleton />
-          </View>
-        </View>
-      ))}
-    </View>
-  );
-}
-
 function GridFooter({
   state,
   total,
@@ -511,15 +496,8 @@ function GridFooter({
   if (state === "loading" || state === "empty") return null;
   if (state === "loadingMore") {
     return (
-      <View className="px-4 mt-3">
-        <View className="flex-row" style={{ gap: COL_GAP }}>
-          <View style={{ flex: 1 }}>
-            <CarCardSkeleton />
-          </View>
-          <View style={{ flex: 1 }}>
-            <CarCardSkeleton />
-          </View>
-        </View>
+      <View>
+        <CarGridSkeleton rows={1} />
         <View className="items-center py-3">
           <ActivityIndicator color={c("primary")} size="small" />
         </View>

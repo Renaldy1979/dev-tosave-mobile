@@ -1,10 +1,8 @@
-import { Image } from "expo-image";
-import { Layers } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Pressable, View } from "react-native";
-import { useTheme } from "@/theme/ThemeProvider";
 import { Text } from "../ui/Text";
 import { Badge } from "../ui/Badge";
+import { CarImage } from "./CarImage";
 
 /**
  * SeriesCard da Home (`componentes.md §C.8`):
@@ -12,7 +10,8 @@ import { Badge } from "../ui/Badge";
  * preto na base, título h3 branco, descrição 1 linha white/70,
  * Badge flame "Em destaque" no canto superior.
  *
- * Sem imagem: palco `surface-2` com `Layers` 40 pt e o título.
+ * Sem imagem ou com falha no download: placeholder padrão do
+ * `CarImage` (silhueta do logo-car sobre `surface-2`) e o título.
  */
 type Props = {
   id: string;
@@ -24,7 +23,6 @@ type Props = {
 };
 
 export function SeriesCard({ id, title, description, image, carCount, onPress }: Props) {
-  const { c } = useTheme();
   return (
     <Pressable
       accessibilityRole="button"
@@ -33,18 +31,7 @@ export function SeriesCard({ id, title, description, image, carCount, onPress }:
       className="rounded-lg overflow-hidden bg-surface-2 active:opacity-90"
       style={{ width: 280, height: 160 }}
     >
-      {image ? (
-        <Image
-          source={{ uri: image }}
-          style={{ width: "100%", height: "100%" }}
-          contentFit="cover"
-          transition={200}
-        />
-      ) : (
-        <View className="flex-1 items-center justify-center">
-          <Layers color={c("fg-subtle")} size={40} strokeWidth={1.75} opacity={0.6} />
-        </View>
-      )}
+      <CarImage uri={image} style={{ width: "100%", height: "100%" }} placeholderScale="50%" />
       {/* gradiente preto 0 → 80% de baixo para cima */}
       <LinearGradient
         colors={["rgba(0,0,0,0)", "rgba(0,0,0,0.8)"]}
