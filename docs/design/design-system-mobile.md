@@ -330,7 +330,7 @@ Base 4 pt (escala do Tailwind). Tokens extras: `4.5` 18, `11` 44, `13` 52, `15` 
 ### 6.2 Densidade
 
 - **Confortável por padrão**: o app é de navegação e contemplação, não de operação. Uma linha de lista tem no mínimo 56 pt; linha com thumbnail tem 72 pt.
-- Cards "médios" (requisito): em celular de 360–430 pt, 2 colunas; o card fica entre 158 e 199 pt de largura, imagem 4:3 (119–149 pt de altura) e corpo de 76 pt. A imagem ocupa ~62% do card.
+- Cards "médios" (requisito): em celular de 360–430 pt, 2 colunas; o card fica entre 158 e 199 pt de largura, imagem 4:3 (119–149 pt de altura) e corpo de **94 pt** (padding 12 + eyebrow 14 + título 2 × 18 + série 16 + 2 gaps de 2 + padding 12). O card fica entre 213 e 243 pt de altura, e a imagem ocupa 56–61% dele.
 - Máximo de **uma** ação primária visível por tela.
 
 ### 6.3 Grid responsivo (FlashList / FlatList `numColumns`)

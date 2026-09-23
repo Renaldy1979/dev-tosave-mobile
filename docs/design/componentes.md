@@ -151,7 +151,7 @@ type CarCardProps = {
 ```
 
 - Container: `Pressable` `rounded-lg bg-surface border border-border overflow-hidden` + `elevation("e1")` no light. Press: escala 0.98 e `bg-surface-3` no corpo.
-- Corpo: `p-3 gap-0.5`, altura fixa de 76 pt (título sempre reserva 2 linhas com `numberOfLines={2}` + `minHeight`) para o grid alinhar.
+- Corpo: `p-3 gap-0.5`, altura de **94 pt** (`minHeight: 94`) = padding 12 + eyebrow 14 + título 36 + série 16 + 2 gaps de 2 + padding 12. O título sempre reserva 2 linhas (`numberOfLines={2}` + `minHeight` de 2 linhas), para que todos os cards de uma linha do grid tenham a mesma altura, com título de 1 ou 2 linhas.
 - Imagem: `aspect-card`, `expo-image` com `recyclingKey={car.id}`, `transition={200}`, placeholder `Car` (DS §10) sem imagem ou em erro.
 - Badges sobre a imagem a 8 pt das bordas.
 - A área clicável é o card inteiro (`accessibilityRole="button"`, `accessibilityHint="Abre os detalhes"`). O FavoriteButton é um `Pressable` irmão, posicionado em absoluto, fora do Pressable do card, para o toque não propagar.
@@ -173,7 +173,7 @@ type CarCardProps = {
 | Pressed | escala 0.98 |
 | Atualizando coleção | FavoriteButton/Stepper já mostra o novo valor (otimista), ver §13 |
 
-**Desempenho:** `React.memo` com comparação por `car.id`, `inCollection` e `quantity`. Em FlashList, `estimatedItemSize` = largura da coluna × 0,75 + 76.
+**Desempenho:** `React.memo` com comparação por `car.id`, `inCollection` e `quantity`. Em FlashList, `estimatedItemSize` = largura da coluna × 0,75 + 94.
 
 ---
 
