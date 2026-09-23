@@ -45,3 +45,6 @@ example
 
 # maestri (agentes)
 .maestri/
+
+# backend: checkpoints, relatórios e pacotes de deploy
+backend/.state/
