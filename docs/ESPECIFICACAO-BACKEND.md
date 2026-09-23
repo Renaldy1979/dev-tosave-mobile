@@ -438,12 +438,190 @@ Detalhe das Functions: elas falam com o Appwrite pelo endpoint público (`TOSAVE
 
 A API key continua sem `projects.*`/`platforms.*`, mesmo com todos os scopes liberados: esses scopes só existem para a sessão do console.
 
-### Fotos (parte 2, a partir da pasta local do usuário)
+### Validação de origem (plataformas), testada em 23/09/2026
 
-Script `upload-images.mjs` (a escrever quando a pasta estiver disponível):
+Plataformas cadastradas: só Android `host.exp.exponent` e iOS `host.exp.Exponent`, sem curinga.
 
-1. **Indexa a pasta:** percorre a pasta local recursivamente, indexa pelo nome do arquivo e ignora `*_thumb.jpg`, porque os thumbs saem do `getFilePreview`.
-2. **Casa com o carro:** o nome do arquivo é comparado com o nome em `cars.sourceImagePath` (`/tosave/cars/<hash>_<nome>.jpg`). Se houver ambiguidade, usa o caminho relativo `cars/<arquivo>`.
-3. **Sobe e vincula:** `fileId` = uuid do carro sem hífens (o 409 indica que já existe, então pula) → `createFile` no `car-images` → `imageFileId` no carro. A `catalog-sync` propaga o vínculo para `collection_items.carImageFileId`.
-4. **Aquece o cache:** chama as prévias de 400 e 1080 px, com os mesmos parâmetros do app.
-5. **Retoma e reporta:** checkpoint e relatório dos carros sem arquivo e dos arquivos sem carro.
+| Origem | Resultado |
+|---|---|
+| `appwrite-android://…` e `appwrite-ios://…` com **qualquer** identificador | aceita |
+| `appwrite-macos/windows/linux://…` e esquema qualquer | recusada (`general_unknown_origin`) |
+| Web com host inventado (`https://naoexiste.exemplo`) | recusada |
+| `http://localhost:*`, o host do próprio Appwrite e `exp://…` | aceitas (liberadas pelo próprio Appwrite) |
+| Sem header `Origin` (clientes que não são navegador) | aceita |
+
+Antes do cadastro das plataformas, `appwrite-android://com.naoexiste.teste` era recusada. Isso indica que, para esquemas nativos, o Appwrite confere o **tipo** de plataforma e não o identificador. Só para origens web ele confere o host.
+
+**Risco para o ToSave: baixo.** A origem é uma proteção de navegador:
+
+- Um site malicioso não consegue forjar `Origin`, e origens web inventadas são recusadas.
+- Um cliente nativo ou script pode omitir ou forjar o header de qualquer jeito, então a checagem de plataforma nunca foi barreira contra ele.
+
+A segurança real vem de outras camadas:
+
+- sessão por usuário;
+- catálogo só leitura;
+- coleção gravada só pela Function, com o usuário tirado do header do Appwrite;
+- linhas legíveis só pelo dono;
+- escrita direta recusada (401, validado).
+
+O que sobra é abuso de volume (cadastro aberto, execuções da Function), que independe da origem.
+
+### Fotos (parte 2): upload a partir da pasta local do usuário
+
+Script `npm run upload-images -- --dir=<pasta> [--dry-run] [--limit=N] [--concurrency=6]`. A pasta de origem é **somente leitura**: o script só lista, faz `stat` e lê arquivos.
+
+**Casamento com o carro.** O nome do arquivo local é comparado com o nome em `cars.sourceImagePath`. Se não casar, o script tenta o nome sem extensão: 1.013 caminhos da origem são `.jpeg`/`.png`, e o arquivo local correspondente foi convertido para `.jpg`, com o mesmo hash e o mesmo nome. Arquivos `*_thumb.jpg` são ignorados.
+
+**Envio.** Os JPG originais sobem sem conversão.
+
+1. `fileId` = uuid do carro sem hífens. Se o arquivo já existe, só confere o vínculo.
+2. `createFile` no bucket `car-images`.
+3. Grava `cars.imageFileId`.
+4. Aquece as prévias WebP de 400 e 1080 px, com os mesmos parâmetros do app.
+
+**Durante a carga.** A `catalog-sync` fica desligada, para não gerar ~10 mil eventos. No fim, o script propaga `carImageFileId` para `collection_items` e religa a Function. O checkpoint fica em `.state/upload-images.json`: rodar de novo retoma de onde parou.
+
+`car_images` não é usada aqui: a foto principal é `cars.imageFileId`, e a tabela é só para fotos extras da galeria.
+
+**Dry-run (23/09/2026), pasta `_backup_fotos`:**
+
+| Item | Resultado |
+|---|---|
+| Arquivos na pasta | 20.468 JPG (10.234 originais + 10.234 thumbs, ignorados) |
+| Casados | **10.234 de 10.234 (100%)**, dos quais 1.013 só pela extensão |
+| Carros sem arquivo / arquivos sem carro | 0 / 0 |
+| Tamanho total | 1.773 MB (mediana 0,1 MB, p95 0,6 MB, maior 1,6 MB); nenhum acima do limite de 10 MB |
+| Dimensões (amostra) | largura de 216 a 2000 px, mediana 1280 px |
+
+**Upload real (23/09/2026): concluído.**
+
+| Item | Resultado |
+|---|---|
+| Enviados e vinculados | **10.234 de 10.234**; 0 falhas; 1.773 MB; JPG originais sem conversão |
+| Tempo | ~36 min + ~30 min, em duas rodadas. O ambiente encerrou o processo duas vezes por falta de memória na máquina; na segunda, depois de o script já ter terminado. O checkpoint retomou sem duplicar |
+| Prévias | WebP de 400 e 1080 px aquecidas no cache |
+| Carros sem foto | 421 (não têm caminho de foto na origem) |
+| `collection_items` | 375 de 375 com `carImageFileId` igual ao do carro; 295 com foto e 80 de carros sem foto na origem |
+
+**Lição da carga (fila de eventos):** desligar a `catalog-sync` durante o upload **não descartou** os eventos. O Appwrite continuou enfileirando uma execução por carro alterado e passou a processá-las ao religar: mais de 8 mil pendentes na fila de Functions, drenando por mais de 1 hora.
+
+- **Efeito:** atrasou as execuções por evento, como o `user-cleanup` de um usuário de teste. Nenhum dado errado: cada execução é idempotente e só grava quando o valor muda.
+- **Correção nos scripts:** as cargas em lote agora usam `lib/catalog-sync.mjs → pauseCatalogSync()`, que **tira a assinatura de eventos** durante a carga e a restaura no fim, com recontagem completa depois.
+- **Não afeta o app:** a Function `collection` é chamada de forma síncrona e não passa por essa fila.
+
+## 14. Perfis e moderação (PROPOSTA, nada aplicado)
+
+Requisito (ver `ESPECIFICACAO-MOBILE.md`, "Portal web — requisito registrado na fase 2"):
+
+- **Parceiros** cadastram e editam carros no portal.
+- Tudo o que um parceiro cria ou edita passa por **aprovação de um admin** antes de aparecer no app.
+
+### 14.1 Times e roles
+
+| Time | Quem | Pode |
+|---|---|---|
+| `admins` (já existe) | usuário dono e quem ele indicar | tudo no catálogo; revisar, aprovar e rejeitar submissões |
+| `partners` (novo) | parceiros convidados pelo admin | **criar** carros (via submissão aprovada); **editar os próprios** carros (via submissão aprovada; confirmar com o usuário); **apagar os próprios** carros que não estejam em nenhuma coleção (direto, sem fila, §14.5); ler o catálogo. Carros de outros, séries, marcas e atributos: **só admin** |
+| (sem time) | colecionadores | ler o catálogo publicado; a própria coleção |
+
+- As roles dentro do time (`owner`, `admin`, `partner`) ficam como etiqueta. A permissão é dada pelo time: `Role.team("admins")`, `Role.team("partners")`.
+- Quem entra em `partners` é decidido no portal, pelo admin. O convite é por e-mail quando houver SMTP; até lá, `teams.createMembership` pelo servidor.
+
+### 14.2 Duas opções avaliadas
+
+| | **A. `status` em `cars` + row security** | **B. `cars` = só publicado + `car_submissions`** ✅ |
+|---|---|---|
+| Como o app só vê publicado | Tira o `read("users")` da tabela e põe `read("users")` em cada linha publicada. As pendentes ficam sem essa leitura. Com row security, a leitura da tabela **soma** com a da linha, então a da tabela precisa sair | Por construção: tudo que está em `cars` já foi aprovado. A tabela mantém `read("users")` e só o admin e o servidor escrevem nela |
+| Edição de um carro publicado por parceiro | Precisa de uma segunda linha ("rascunho da edição") ou de campos duplicados, senão suja o publicado | A edição vive em `car_submissions`. `cars` não muda até a aprovação |
+| Custo nas consultas do app | Todas as leituras de `cars` passam a checar permissão por linha (junção com a tabela de permissões em 10 mil+ linhas) | Nenhum: tudo continua como hoje |
+| Contagens (`carCount`, `catalog_meta`) | Precisam filtrar por `status` | Continuam certas sem mudança |
+| Mudança no app (Forja) | Nenhuma se a permissão for por linha. Com filtro por query, toda consulta ganharia `status = published` | **Nenhuma** |
+
+**Recomendação: B.** A garantia continua sendo de **permissão** (quem não é admin nem servidor não escreve em `cars`) e não de filtro. O app fica intacto, e o rascunho nunca encosta no publicado.
+
+O caso "despublicar" (tirar do app sem apagar) ainda não foi pedido. Quando for, dá para ligar row security só em `cars`, com `read("users")` por linha. É uma migração em lote, sem mexer no app.
+
+### 14.3 Tabela `car_submissions`
+
+| Coluna | Tipo | Regra |
+|---|---|---|
+| `kind` | enum `create` \| `edit` | `edit` exige `targetCarId` |
+| `targetCarId` | varchar(36) | carro publicado que a edição quer alterar |
+| `status` | enum `draft` \| `pending` \| `approved` \| `rejected` \| `withdrawn` | máquina de estados na Function (§14.5) |
+| mesmos campos editáveis de `cars` | `title`, `description`, `brandId`, `serieId`, `seriePosition`, `collector`, `color`, `toy`, `year`, `scale`, `attributeIds` | **retrato completo** proposto, e não diferença: o admin vê o resultado final |
+| `imageFileId` | varchar(36) | foto no bucket de submissões (§14.4) |
+| `baseUpdatedAt` | datetime | `$updatedAt` do carro quando o parceiro abriu a edição. Se o carro mudou depois, a aprovação avisa conflito |
+| `createdBy`, `updatedBy` | varchar(36) | userId do parceiro |
+| `reviewedBy`, `reviewedAt`, `reviewNote` | varchar(36), datetime, text | admin, data e motivo da rejeição |
+| `publishedCarId` | varchar(36) | carro criado ou atualizado na aprovação |
+
+- **Índices:** `status` + `$createdAt` (fila do admin), `createdBy` + `$createdAt` (painel do parceiro), `targetCarId`.
+- **Permissões:**
+  - Tabela: `read` e `update` para `team:admins`. Sem `create` para ninguém: toda escrita passa pela Function.
+  - Row security ligada. Cada linha recebe `read("user:<parceiro>")`, e o parceiro só vê as próprias submissões.
+
+### 14.4 Fotos de submissões
+
+- **Bucket `submission-images`:**
+  - `create` para `team:partners` e `team:admins`;
+  - `fileSecurity` ligado, com leitura do autor e de `team:admins`;
+  - fotos não publicadas não ficam públicas.
+- **Na aprovação**, a Function copia o arquivo para `car-images` com o `fileId` determinístico do carro e aquece as prévias. A cópia é baixar e subir de novo, porque o Appwrite não tem cópia entre buckets.
+
+### 14.5 Function `moderation` (única escritora de `car_submissions`)
+
+Execução síncrona pelo portal. O usuário vem do header do Appwrite e o time é conferido no servidor.
+
+| Ação | Quem | Efeito |
+|---|---|---|
+| `submit` (create) | parceiro ou admin | cria em `pending` com `createdBy` |
+| `submit` (edit) | admin: qualquer carro. Parceiro: **só carro com `cars.createdBy` = ele** (senão 403) | cria em `pending`, guarda `baseUpdatedAt`. O carro publicado não muda até a aprovação |
+| `delete_own` | parceiro, só carro próprio | ver "Apagar carro próprio" abaixo |
+| `update` | autor, só em `draft`/`pending` | altera o retrato e o `updatedBy` |
+| `withdraw` | autor | `withdrawn` |
+| `approve` | admin | Numa transação: `upsertRow` em `cars` (novo id em `create`, `targetCarId` em `edit`), `approvedBy`/`approvedAt`, `status=approved`, `publishedCarId`. Depois copia a foto |
+| `reject` | admin | `rejected` + `reviewNote` |
+
+- **Admin editando direto:** o portal pode gravar em `cars` (`team:admins` já tem escrita), registrando `updatedBy`. Se o usuário preferir que até o admin passe pela fila, o portal usa `submit` + `approve`.
+- **Remoção de carro de outros:** só admin.
+
+**Apagar carro próprio (`delete_own`), sem fila de aprovação.** A coleção é privada por linha: o parceiro não enxerga as coleções dos outros. Por isso a checagem roda **só no servidor**, na Function com API key:
+
+1. **Carro e dono:** o usuário está no time `partners` (ou `admins`) e o carro existe com `createdBy` = usuário. Senão, 403 `not_owner`.
+2. **Fora de coleção:** `collection_items` com `carId` = X e `limit(1)` (índice `idx_car`) precisa vir vazio. Senão, 409 `in_collection`. A resposta não diz de quem nem quantas coleções.
+3. **Apagar:** guarda um retrato do carro e apaga a linha de `cars`.
+4. **Corrida:** um colecionador pode ter adicionado o carro entre os passos 2 e 3. Por isso, depois de apagar, a Function **confere de novo** `collection_items`. Se apareceu alguma linha, **recria** o carro com o mesmo `$id` a partir do retrato e responde 409 `in_collection`. A Function `collection` já recusa adicionar carro inexistente (404), então depois do passo 3 nada novo entra.
+5. **Limpeza:** apaga a foto em `car-images` e as linhas de `car_images` do carro, e passa a `withdrawn` as submissões pendentes com `targetCarId` = X. A `catalog-sync` recebe o evento de delete e reconta `carCount` e `catalog_meta`.
+6. **Submissão ainda não aprovada:** o carro não existe em `cars`, então apagar é só `withdraw` da submissão.
+7. **Auditoria:** registra `deletedBy`/`deletedAt` no `audit_log` (§14.6), já que a linha deixa de existir.
+
+### 14.6 Auditoria
+
+- **Em `cars`, colunas novas:**
+  - `createdBy`, `updatedBy`, `approvedBy`, `approvedAt`, `sourceSubmissionId`;
+  - nos migrados: `createdBy = updatedBy = approvedBy = "migration"` e `approvedAt` = data da migração.
+- **Em `car_submissions`:** o histórico completo de quem enviou, quem revisou e por quê.
+- **Tabela `audit_log`:** só inserção pelo servidor (`actorId`, `action`, `tableId`, `rowId`, `at`, `summary`), com leitura para `team:admins`. Passa a ser **necessária** por causa do `delete_own`, porque sem ela não sobra registro de quem apagou. Também cobre as edições diretas do admin.
+
+### 14.7 Impacto
+
+| Área | Muda? |
+|---|---|
+| **App / Forja** | **Nada agora.** As consultas de `cars` seguem iguais, porque tudo em `cars` é publicado. Se um dia houver "despublicar", continua sem mudança (row security por linha) |
+| `catalog-sync` | Nada. Ela ouve eventos de `cars`; a aprovação grava em `cars` e dispara a recontagem e a propagação normalmente. Ela **não** deve ouvir `car_submissions` |
+| `carCount` / `catalog_meta` | Nada: só contam publicados, por construção |
+| `collection` | Nada: só aceita `carId` existente em `cars` (publicado). Isso fecha a corrida do `delete_own` |
+| `user-cleanup` | Parceiro removido: as submissões **ficam**, para auditoria. As pendentes dele passam a `withdrawn` |
+| Schema | +time `partners`, +tabelas `car_submissions` e `audit_log`, +bucket `submission-images`, +5 colunas de auditoria em `cars` (preenchidas nos migrados por `updateRows` em lote), +Function `moderation` (com scopes `rows.*` e `files.*`). Tudo por `npm run schema` / `deploy-functions`, só criação |
+
+### 14.8 Perguntas para o usuário
+
+1. ~~Série, marca ou atributo pelo parceiro?~~ **Decidido:** só admin.
+2. ~~Remoção pelo parceiro?~~ **Decidido:** só dos próprios carros e só fora de qualquer coleção (`delete_own`).
+3. **A confirmar:** a edição dos próprios carros pelo parceiro passa por aprovação (proposto) ou vai direto?
+4. Um carro próprio que **já está em coleções** o parceiro não apaga. Ele pode ao menos pedir a remoção ao admin?
+5. As **edições do admin** também passam pela fila ou vão direto (com auditoria)?
+6. O parceiro vê as submissões de **outros** parceiros (para evitar duplicata) ou só as próprias?
+7. Aviso ao parceiro quando aprovado ou rejeitado: e-mail (precisa de SMTP), push ou só no portal?
+8. É preciso **despublicar** sem apagar (tirar do app mantendo o registro)?

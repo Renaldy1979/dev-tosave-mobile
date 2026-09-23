@@ -35,6 +35,12 @@ A fase 1 está entregue (tag `v0.1.0-fase1`). A fase 2 vem **antes** do portal w
 - O login simulado e os dados de `src/mocks/` são substituídos pelo Appwrite. Os mocks podem continuar existindo para desenvolvimento, mas nenhuma tela os usa.
 - Backend: código em `backend/` e especificação em `docs/ESPECIFICACAO-BACKEND.md`. É responsabilidade do agente **Alicerce**.
 
+### Navegação futura — decisão do usuário (23/09/2026)
+
+- **As abas vão sair e dar lugar a um menu hambúrguer (drawer).** Motivo: qualquer funcionalidade nova entra no menu sem precisar inventar um atalho a cada vez.
+- A análise do app atual e das funcionalidades que faltam (Séries, Estatísticas, Notificações, Novidades, Clube de Troca, Garagens) está em `docs/design/navegacao-fase2.md`.
+- **Só depois de validar a ligação com o Appwrite.** Até lá, a navegação fica como está.
+
 ### Portal web — requisito registrado na fase 2 (23/09/2026)
 
 - **Funcionalidades liberadas por perfil.** O usuário vai deixar **parceiros** entrarem no portal para cadastrar carros e ajudar a subir o banco. **Decidido: o que um parceiro cadastra ou edita passa por aprovação de um admin antes de aparecer no app.** **Parceiro:** cria carros e **só apaga os que ele mesmo criou**, e só se o carro não estiver em nenhuma coleção. Edição dos próprios carros também passa por aprovação (a confirmar com o usuário). Carros de outros e séries, marcas e atributos ficam com admin. A base (times e roles do Appwrite e permissões das tabelas) precisa ser preparada para isso antes de qualquer parceiro entrar.
