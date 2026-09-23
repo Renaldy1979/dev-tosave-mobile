@@ -2,7 +2,22 @@
 
 ## Decisões do Orquestrador
 
-- **Itens 11 (FilterSheet com os 8 primeiros e "Ver todos") e 21 (GalleryViewer com pinch, duplo toque e arrastar para fechar):** entram **nesta fase**. São critérios de aceite das specs, e as specs são a fonte da verdade.
+Escopo revisto pelo usuário em 23/09/2026: ver "Critério de pronto da fase 1" em `docs/ESPECIFICACAO-MOBILE.md`.
+
+**O Forja corrige nesta rodada SÓ estes itens (fase 1):**
+
+- Bloqueantes: 1, 2, 3, 4, 5, 6
+- Importantes:
+  - 7, 8
+  - 14, 15, 16
+  - **17**: só o texto de erro oficial no lugar de `errorMsg` cru
+  - 18, 20
+  - **21**: só os bugs de índice do `GalleryViewer` e `CarGallery` (sem pinch)
+  - 22, 23, 24, 25, 26, 27
+  - 29, 30, 31, 32
+
+Todo o resto vai para `docs/briefings/fase-1.5-polimento.md`. Isso inclui os itens 11 e 21 (pinch e gestos), que antes eu tinha colocado nesta fase.
+
 - **Sair e "Voltar ao início":** navegar direto para a rota das tabs (`/(tabs)`), não para `/`.
 
 Escopo: Busca (`app/(tabs)/busca.tsx`), Detalhe (`app/car/[id].tsx`), Coleção (`app/(tabs)/colecao.tsx`), Perfil (`app/(tabs)/perfil.tsx`) e os componentes novos listados em `lote-02-busca-detalhe-colecao-perfil.md`. Referências: specs `telas/04..07`, `design-system-mobile.md` e `componentes.md`.
