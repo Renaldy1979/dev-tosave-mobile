@@ -8,7 +8,7 @@ import {
 import {
   useRouter,
 } from "expo-router";
-import { LogOut, Moon, Smartphone, Sun } from "lucide-react-native";
+import { LogOut, Moon, RotateCcw, Smartphone, Sun } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
 import Constants from "expo-constants";
 import Animated, {
@@ -40,6 +40,7 @@ import { ErrorState } from "@/components/ui/ErrorState";
 import { ProfileSkeleton } from "@/components/car/CarCardSkeleton";
 import { LoginGate } from "@/components/ui/LoginGate";
 import { useToast } from "@/components/ui/Toast";
+import { clearOnboardingSeen } from "@/utils/onboarding";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -102,6 +103,13 @@ export default function Perfil() {
       setSignOutLoading(false);
     }
   }, [signOut, router, show]);
+
+  const handleReplayOnboarding = useCallback(async () => {
+    // Limpa o flag e navega para o onboarding. A próxima abertura do
+    // app também verá o onboarding (decisão da revisão do lote 02).
+    await clearOnboardingSeen();
+    router.replace("/onboarding");
+  }, [router]);
 
   const scrollY = useSharedValue(0);
   const scrollHandler = useAnimatedScrollHandler((event) => {
@@ -277,6 +285,11 @@ export default function Perfil() {
             <ListRow icon={Mail} label="E-mail" value={user.email} />
           </View>
           <View className="rounded-lg bg-surface border border-border overflow-hidden mt-3">
+            <ListRow
+              icon={RotateCcw}
+              label="Rever apresentação"
+              onPress={handleReplayOnboarding}
+            />
             <ListRow
               icon={LogOut}
               label="Sair"

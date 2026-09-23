@@ -13,8 +13,7 @@ import { Text } from "@/components/ui/Text";
 import { readSessionFlag } from "@/hooks/useCurrentUser";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { getCurrentUser } from "@/services/auth";
-
-const ONBOARDING_KEY = "tosave.onboarding.seen";
+import { readOnboardingSeen } from "@/utils/onboarding";
 
 /**
  * Splash animado (`docs/design/telas/01-onboarding-splash.md §1.2`).
@@ -48,8 +47,8 @@ export default function Index() {
     let cancelled = false;
 
     const decide = async () => {
-      const [seenValue, hasSession] = await Promise.all([
-        AsyncStorage.getItem(ONBOARDING_KEY).catch(() => null),
+      const [seen, hasSession] = await Promise.all([
+        readOnboardingSeen(),
         readSessionFlag().catch(() => false),
       ]);
 
@@ -65,7 +64,7 @@ export default function Index() {
         }
       }
       if (cancelled) return;
-      const dest = seenValue === "1" ? "/(tabs)" : "/onboarding";
+      const dest = seen ? "/(tabs)" : "/onboarding";
 
       // Fade out da logo + barra (250 ms), escala 1 → 1.04, depois navega.
       // Movimento reduzido: fade simples de 200 ms sem escala.
