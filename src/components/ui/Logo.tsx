@@ -28,9 +28,9 @@ const HEIGHT_FACTOR = 0.374;
 
 // require com `number` para o expo-image aceitar assets externos.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const logoDark = require("../../_brand/logo.png");
+const logoDark = require("../../../_brand/logo.png");
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const logoLight = require("../../_brand/logo-light.png");
+const logoLight = require("../../../_brand/logo-light.png");
 
 export function Logo({ variant = "auto", size = "md", className }: Props) {
   const { scheme } = useTheme();
@@ -62,7 +62,7 @@ export function LogoCar({ width = 220, className }: { width?: number; className?
   return (
     <Image
       // eslint-disable-next-line @typescript-eslint/no-require-imports
-      source={require("../../_brand/logo-car.png")}
+      source={require("../../../_brand/logo-car.png")}
       style={{ width, height }}
       contentFit="contain"
       accessibilityLabel=""
