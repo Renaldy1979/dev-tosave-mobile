@@ -7,8 +7,11 @@ import { simulateLatency } from "./_delay";
  * A fase 2 troca para armazenamento persistente (SecureStore/AsyncStorage)
  * e valida a senha em servidor — a forma (`Session` com `User | null`)
  * continua a mesma.
+ *
+ * Exportado para `users.updateProfile` manter a sessão sincronizada
+ * após edição do perfil.
  */
-const state: { session: Session } = { session: { user: null } };
+export const state: { session: Session } = { session: { user: null } };
 
 /** Resultado de `signIn`: sucesso traz o usuário, erro traz a mensagem. */
 export type SignInResult =

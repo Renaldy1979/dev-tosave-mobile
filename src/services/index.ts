@@ -40,3 +40,6 @@ export {
   signOut,
 } from "./auth";
 export type { SignInResult } from "./auth";
+
+export { updateProfile } from "./users";
+export type { UpdateProfileInput, UpdateProfileResult } from "./users";
