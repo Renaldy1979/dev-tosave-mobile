@@ -57,7 +57,7 @@ export default function Home() {
 
   const [cars, setCars] = useState<CarListItem[]>([]);
   const [carsTotal, setCarsTotal] = useState(0);
-  const [carsPage, setCarsPage] = useState(1);
+  const [carsCursor, setCarsCursor] = useState<string | null>(null);
   const [gridState, setGridState] = useState<GridState>("loading");
   const [gridError, setGridError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -83,14 +83,17 @@ export default function Home() {
   }, []);
 
   const loadCarsPage = useCallback(
-    async (page: number, replace: boolean) => {
-      setGridState((prev) => (page === 1 ? "loading" : "loadingMore"));
+    async (cursor: string | null, replace: boolean) => {
+      setGridState((prev) => (cursor === null ? "loading" : "loadingMore"));
       setGridError(null);
       try {
-        const result = await listCarsPaged({ page, pageSize: PAGE_SIZE });
+        const result = await listCarsPaged({
+          cursor: cursor ?? undefined,
+          pageSize: PAGE_SIZE,
+        });
         setCars((prev) => (replace ? result.items : [...prev, ...result.items]));
-        setCarsTotal(result.total);
-        setCarsPage(result.page);
+        setCarsTotal(result.total ?? 0);
+        setCarsCursor(result.nextCursor);
         setGridState(result.items.length === 0 ? "empty" : "ok");
       } catch (err) {
         setGridError(err instanceof Error ? err.message : "Erro ao carregar.");
@@ -102,7 +105,7 @@ export default function Home() {
 
   useEffect(() => {
     void loadSeries();
-    void loadCarsPage(1, true);
+    void loadCarsPage(null, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -111,7 +114,7 @@ export default function Home() {
     try {
       await Promise.all([
         loadSeries(),
-        loadCarsPage(1, true),
+        loadCarsPage(null, true),
         collection.refresh(),
         refreshUser(),
       ]);
@@ -125,8 +128,8 @@ export default function Home() {
   // ---------- Interações ----------
   const handleEndReached = () => {
     if (gridState !== "ok") return;
-    if (cars.length >= carsTotal) return;
-    void loadCarsPage(carsPage + 1, false);
+    if (!carsCursor) return;
+    void loadCarsPage(carsCursor, false);
   };
 
   const handleToggleCollection = useCallback(
@@ -236,7 +239,7 @@ export default function Home() {
             total={carsTotal}
             loaded={cars.length}
             error={gridError}
-            onRetry={() => loadCarsPage(carsPage + 1, false)}
+            onRetry={() => loadCarsPage(carsCursor, false)}
           />
         }
         ListEmptyComponent={
@@ -247,7 +250,7 @@ export default function Home() {
           ) : gridState === "empty" ? (
             <EmptyState kind="no-cars" />
           ) : gridState === "error" ? (
-            <ErrorState onRetry={() => loadCarsPage(1, true)} />
+            <ErrorState onRetry={() => loadCarsPage(null, true)} />
           ) : null
         }
       />

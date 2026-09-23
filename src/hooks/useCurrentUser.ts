@@ -1,39 +1,36 @@
 import { useCallback, useSyncExternalStore } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { getCurrentUser, signIn, signOut, type SignInResult } from "@/services/auth";
+import {
+  getCurrentUser,
+  signIn as serviceSignIn,
+  signOut as serviceSignOut,
+  subscribeAuth,
+  bindUnauthorizedHandler,
+  type SignInResult,
+} from "@/services/auth";
+import { silentSignOut } from "@/services/_session";
 import type { User } from "@/types";
-
-const SESSION_FLAG_KEY = "tosave.session";
 
 /**
  * Sessão atual do app — **store de módulo compartilhado** entre todas
- * as instâncias do hook.
+ * as instâncias do hook (lido via `useSyncExternalStore`).
  *
- * Bug da fase 1: cada componente que chamava `useCurrentUser()` tinha
- * o seu próprio `useState`, então o `signIn` feito dentro do modal de
- * login não chegava ao `CollectionProvider` montado no root. O store
- * ficava com `user = null`, o que tornava a Coleção sempre vazia após o
- * login.
+ * Fase 2: o client Appwrite persiste a sessão sozinho; este hook é o
+ * espelho de reatividade que dispara `useSyncExternalStore` quando há
+ * mudança local (signIn/signOut dentro do app).
  *
- * Correção: um único `state` no escopo do módulo, lido via
- * `useSyncExternalStore` (re-renderiza todos os consumidores quando
- * muda). A API pública do hook é a mesma — `{ user, loading, signIn,
- * signOut, refresh }` — então nenhum consumidor precisa mudar.
- *
- * `signIn` e `signOut` ficam expostos pelo hook mas operam no store
- * global. `refresh` continua existindo para sincronização sob demanda.
+ * A API pública do hook é a mesma da fase 1:
+ * `{ user, loading, signIn, signOut, refresh }`.
  */
-type Listener = () => void;
 
-let state: { user: User | null; loading: boolean } = {
+type Listener = () => void;
+const listeners = new Set<Listener>();
+let snapshot: { user: User | null; loading: boolean } = {
   user: null,
   loading: true,
 };
 
-const listeners = new Set<Listener>();
-
 function emit() {
-  for (const listener of listeners) listener();
+  for (const l of listeners) l();
 }
 
 function subscribe(listener: Listener) {
@@ -44,45 +41,44 @@ function subscribe(listener: Listener) {
 }
 
 function getSnapshot() {
-  return state;
+  return snapshot;
 }
 
 function getServerSnapshot() {
-  return state;
+  return snapshot;
 }
 
-function setState(next: { user: User | null; loading: boolean }) {
-  if (next === state) return;
-  state = next;
+function setSnapshot(next: { user: User | null; loading: boolean }) {
+  if (next === snapshot) return;
+  snapshot = next;
   emit();
 }
 
-/**
- * Dispara o carregamento inicial da sessão. Idempotente — só corre uma
- * vez por módulo.
- */
 let bootstrapStarted = false;
-function ensureBootstrap() {
+async function ensureBootstrap() {
   if (bootstrapStarted) return;
   bootstrapStarted = true;
-  void (async () => {
-    try {
-      const user = await getCurrentUser();
-      setState({ user, loading: false });
-    } catch {
-      setState({ user: null, loading: false });
-    }
-  })();
+  // 1ª carga: o cliente Appwrite pode já ter sessão (do restart do
+  // app). `getCurrentUser` consulta o espelho em memória (vazio após
+  // boot) e cai para `account.get()`.
+  await refreshUser();
+  // Liga o callback de unauthorized — quando o Appwrite devolve 401
+  // em qualquer chamada autenticada, o app volta ao Login. Ligar uma
+  // vez só.
+  bindUnauthorizedHandler(() => {
+    silentSignOut();
+    setSnapshot({ user: null, loading: false });
+  });
 }
 
 ensureBootstrap();
 
-async function refreshUser(): Promise<void> {
+async function refreshUser() {
   try {
     const user = await getCurrentUser();
-    setState({ user, loading: false });
+    setSnapshot({ user, loading: false });
   } catch {
-    setState({ user: null, loading: false });
+    setSnapshot({ user: null, loading: false });
   }
 }
 
@@ -90,32 +86,25 @@ async function signInAndSync(
   email: string,
   password: string
 ): Promise<SignInResult> {
-  const result = await signIn(email, password);
+  const result = await serviceSignIn(email, password);
   if (result.ok) {
-    setState({ user: result.user, loading: false });
-    try {
-      await AsyncStorage.setItem(SESSION_FLAG_KEY, "1");
-    } catch {
-      // ignora
-    }
+    setSnapshot({ user: result.user, loading: false });
   }
   return result;
 }
 
-async function signOutAndSync(): Promise<void> {
-  await signOut();
-  setState({ user: null, loading: false });
-  try {
-    await AsyncStorage.removeItem(SESSION_FLAG_KEY);
-  } catch {
-    // ignora
-  }
+async function signOutAndSync() {
+  await serviceSignOut();
+  setSnapshot({ user: null, loading: false });
 }
 
-/**
- * Hook público. Mantém a mesma assinatura da fase 1 para que os
- * consumidores não mudem.
- */
+// Encaminha o `subscribeAuth` do service para os listeners do store.
+subscribeAuth(() => {
+  // No-op: o store já mantém o espelho e atualiza via `setSnapshot`
+  // dentro dos handlers. O `subscribeAuth` é usado por consumidores
+  // que queiram reagir fora do hook principal.
+});
+
 export function useCurrentUser(): {
   user: User | null;
   loading: boolean;
@@ -123,7 +112,7 @@ export function useCurrentUser(): {
   signOut: () => Promise<void>;
   refresh: () => Promise<void>;
 } {
-  const snapshot = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  const snap = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
   const signInFn = useCallback(
     async (email: string, password: string) => signInAndSync(email, password),
     []
@@ -135,8 +124,8 @@ export function useCurrentUser(): {
     await refreshUser();
   }, []);
   return {
-    user: snapshot.user,
-    loading: snapshot.loading,
+    user: snap.user,
+    loading: snap.loading,
     signIn: signInFn,
     signOut: signOutFn,
     refresh: refreshFn,
@@ -144,14 +133,9 @@ export function useCurrentUser(): {
 }
 
 /**
- * Lê só a flag de "houve sessão" no AsyncStorage. Usado pelo splash
- * decidir destino sem precisar instanciar o service (mais barato).
+ * Lê só a flag de "houve sessão" no AsyncStorage. Mantida para o splash.
  */
 export async function readSessionFlag(): Promise<boolean> {
-  try {
-    const value = await AsyncStorage.getItem(SESSION_FLAG_KEY);
-    return value === "1";
-  } catch {
-    return false;
-  }
+  const { readSessionFlag: readFlag } = await import("@/utils/sessionFlag");
+  return readFlag();
 }

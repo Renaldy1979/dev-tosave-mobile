@@ -1,10 +1,11 @@
 /**
  * Barrel dos services. Telas e componentes importam daqui:
  *
- *   import { listCars, signIn } from "@/services";
+ *   import { listCarsPaged, signIn } from "@/services";
  *
- * Nenhuma tela deve importar diretamente de `@/mocks` — esta é a
- * fronteira que isola a fase 1 (mocks) da fase 2 (API real).
+ * Os services da fase 2 falam com o Appwrite (fase 2 do projeto). A
+ * pasta `src/mocks/` existe só para desenvolvimento e **nenhuma tela
+ * nem service importa de lá** — qualquer leitura de mock é bug.
  */
 export {
   countCars,

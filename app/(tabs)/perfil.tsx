@@ -82,7 +82,7 @@ export default function Perfil() {
     }
     setSummaryState("loading");
     try {
-      const s = await getCollectionSummary(user.id);
+      const s = await getCollectionSummary();
       setSummary(s);
       setSummaryState("ok");
     } catch {

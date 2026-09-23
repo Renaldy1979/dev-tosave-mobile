@@ -26,6 +26,12 @@
       "output": "single",
       "favicon": "./assets/brand/favicon.png"
     },
+    "extra": {
+      "appwriteEndpoint": "https://tosave-appwrite.8m5sgi.easypanel.host/v1",
+      "appwriteProjectId": "6aa1d3ab0039a9a9a8c4",
+      "appwriteDatabaseId": "tosave",
+      "appwriteBucketImages": "car-images"
+    },
     "plugins": [
       "expo-router",
       ["expo-splash-screen", { "image": "./assets/brand/logo.png", "imageWidth": 220, "resizeMode": "contain", "backgroundColor": "#0B0B0D" }],

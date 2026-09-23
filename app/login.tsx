@@ -15,7 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/theme/ThemeProvider";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useCollectionStore } from "@/hooks/useCollectionStore";
-import { addToCollection, getCollectionQuantity } from "@/services/collection";
+import { addToCollection } from "@/services/collection";
 // `getDemoCredentials` removido na fase 2 (não há mais dados de exemplo).
 import { LogoCar } from "@/components/ui/Logo";
 import { ScreenContainer } from "@/components/ui/ScreenContainer";
@@ -142,16 +142,15 @@ export default function Login() {
     // Conclui a ação pendente antes de fechar.
     if (variant === "add" && params.carId) {
       try {
-        // Só soma unidade se ainda não estiver na coleção.
-        const existing = await getCollectionQuantity(result.user.id, params.carId);
-        if (existing === 0) {
-          await addToCollection(result.user.id, params.carId);
-          // O store compartilhado já recarrega automaticamente quando
-          // o user muda (via useEffect), mas garantimos consistência
-          // imediata para a próxima tela.
-          await collectionStore.refresh();
-          show({ type: "success", message: "Adicionada à sua coleção." });
-        }
+        // A Function `collection` é idempotente: se o item já existir
+        // (quantity ≥ 1), o `add` soma 1; senão cria com 1. Por isso
+        // não precisa checar a quantidade antes — basta chamar.
+        await addToCollection(params.carId);
+        // O store compartilhado já recarrega automaticamente quando
+        // o user muda (via useEffect), mas garantimos consistência
+        // imediata para a próxima tela.
+        await collectionStore.refresh();
+        show({ type: "success", message: "Adicionada à sua coleção." });
       } catch {
         show({ type: "danger", message: "Não foi possível atualizar sua coleção." });
       }

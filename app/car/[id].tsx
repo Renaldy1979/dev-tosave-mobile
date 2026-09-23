@@ -117,7 +117,7 @@ export default function CarDetalhe() {
       return;
     }
     setRelatedState("loading");
-    void listBySeriePaged(detail.serieId, { excludeId: detail.id, page: 1, pageSize: 10 })
+    void listBySeriePaged(detail.serieId, { excludeId: detail.id, pageSize: 10 })
       .then((r) => {
         setRelated(r.items);
         setRelatedState("ok");

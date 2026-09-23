@@ -1,186 +1,369 @@
-import { carsMock, collectionMock } from "@/mocks";
+import {
+  tablesDb,
+  functions,
+  storage,
+  APPWRITE_DATABASE_ID,
+  APPWRITE_FUNCTION_COLLECTION,
+  APPWRITE_BUCKET_IMAGES,
+  withServiceError,
+  Query,
+} from "./_appwrite";
+import type { Models } from "react-native-appwrite";
+import { ExecutionMethod, ImageFormat } from "react-native-appwrite";
 import type {
-  Car,
   CollectionItem,
   CollectionItemWithCar,
   CollectionSummary,
 } from "@/types";
-import { simulateLatency } from "./_delay";
 
 /**
- * Coleção em memória. A fase 1 muta este array a cada `addToCollection`,
- * `removeFromCollection` e `setCollectionQuantity`. A fase 2 substitui
- * por chamadas HTTP — a forma do dado continua a mesma.
+ * Coleção do usuário — fase 2, Appwrite.
+ *
+ * `userId` sai dos argumentos da coleção: o servidor usa o header
+ * `x-appwrite-user-id` injetado pelo client nas chamadas autenticadas.
+ *
+ * Mutações (`add`/`set`/`remove`) vão pela Function `collection`
+ * (§6 do backend) que é a única fonte da verdade — atualiza
+ * `collection_items` + `user_stats` em transação atômica. O app segue
+ * otimista (atualiza o store na hora e reconcilia com a resposta).
+ *
+ * Leituras paginadas usam `getCollectionPaged`. Resumo via
+ * `user_stats` (404 → zeros).
  */
-const state: { items: CollectionItem[] } = {
-  items: collectionMock.map((item) => ({ ...item })),
-};
 
-function nextId(): string {
-  return `ci-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`;
+const TABLE = {
+  collectionItems: "collection_items",
+  userStats: "user_stats",
+} as const;
+
+const Webp: ImageFormat = "webp" as ImageFormat;
+
+/* ================================================================== */
+/*                          TIPOS DO APPWRITE                            */
+/* ================================================================== */
+
+interface CollectionItemRow extends Models.Row {
+  userId: string;
+  carId: string;
+  quantity: number;
+  carTitle: string;
+  carToy: string;
+  carCollector: string;
+  carYear: number;
+  carColor: string;
+  carScale: string;
+  carSeriePosition?: string;
+  carImageFileId?: string | null;
+  brandId: string;
+  brandName: string;
+  serieId: string;
+  serieTitle: string;
+  searchText?: string;
 }
 
-function nowIso(): string {
-  return new Date().toISOString();
+interface UserStatsRow extends Models.Row {
+  totalItems: number;
+  totalModels: number;
+  duplicates: number;
 }
 
-/**
- * Critérios de listagem aceitos pela tela Coleção.
- * - `q` busca em `title`, `toy` e `collector` (case-insensitive).
- * - `duplicatesOnly` aplica o filtro "Repetidos" (`quantity > 1`).
- */
+/* ================================================================== */
+/*                            CONVERSORES                               */
+/* ================================================================== */
+
+function rowToCollectionItem(row: CollectionItemRow): CollectionItem {
+  return {
+    id: row.$id,
+    userId: row.userId,
+    carId: row.carId,
+    quantity: row.quantity,
+    createdAt: row.$createdAt ?? "",
+  };
+}
+
+function rowToCar(row: CollectionItemRow): {
+  id: string;
+  title: string;
+  description: string;
+  brandId: string;
+  brandName: string;
+  serieId: string;
+  serieTitle: string;
+  collector: string;
+  color: string;
+  toy: string;
+  year: number;
+  scale: string;
+  imagemFull: string | null;
+  imagemThumb: string | null;
+  seriePosition: string | null;
+} {
+  return {
+    id: row.carId,
+    title: row.carTitle,
+    description: "",
+    brandId: row.brandId,
+    brandName: row.brandName,
+    serieId: row.serieId,
+    serieTitle: row.serieTitle,
+    collector: row.carCollector,
+    color: row.carColor,
+    toy: row.carToy,
+    year: row.carYear,
+    scale: row.carScale,
+    imagemFull: row.carImageFileId
+      ? storage
+          .getFilePreviewURL(
+              APPWRITE_BUCKET_IMAGES,
+              row.carImageFileId,
+              1080,
+              0,
+              undefined,
+              85,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              Webp
+            )
+          .toString()
+      : null,
+    imagemThumb: row.carImageFileId
+      ? storage
+          .getFilePreviewURL(
+              APPWRITE_BUCKET_IMAGES,
+              row.carImageFileId,
+              400,
+              0,
+              undefined,
+              75,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              Webp
+            )
+          .toString()
+      : null,
+    seriePosition: row.carSeriePosition ?? null,
+  };
+}
+
+function rowToItemWithCar(row: CollectionItemRow): CollectionItemWithCar {
+  return {
+    ...rowToCollectionItem(row),
+    car: rowToCar(row) as unknown as CollectionItemWithCar["car"],
+  };
+}
+
+/* ================================================================== */
+/*                            LISTAGEM                                   */
+/* ================================================================== */
+
+/** Critérios da tela Coleção. */
 export interface CollectionListFilters {
   q?: string;
   duplicatesOnly?: boolean;
 }
 
-function matchesQuery(car: Car, term: string): boolean {
-  const lower = term.toLowerCase();
-  return (
-    car.title.toLowerCase().includes(lower) ||
-    car.toy.toLowerCase().includes(lower) ||
-    car.collector.toLowerCase().includes(lower)
-  );
+/** Resposta paginada por cursor. */
+export interface PaginatedCollection {
+  items: CollectionItemWithCar[];
+  /** Total só na 1ª página; null nas demais. */
+  total: number | null;
+  /** Cursor da próxima página; null quando acabou. */
+  nextCursor: string | null;
 }
 
-/**
- * Lista os itens da coleção do usuário atual, já com o carro resolvido.
- * Quando o usuário não está autenticado, retorna lista vazia — a tela
- * Coleção mostra o `LoginGate` nesse caso.
- */
+/** Lista a coleção paginada por cursor. `userId` sai dos args. */
+export async function getCollectionPaged(
+  filters: CollectionListFilters & { cursor?: string; pageSize?: number } = {}
+): Promise<PaginatedCollection> {
+  const pageSize = filters.pageSize ?? 20;
+  const isFirstPage = !filters.cursor;
+  const queries: string[] = [
+    Query.orderDesc("$createdAt"),
+    Query.limit(pageSize),
+  ];
+  if (filters.cursor) {
+    queries.push(Query.cursorAfter(filters.cursor));
+  }
+  if (filters.duplicatesOnly) {
+    queries.push(Query.greaterThan("quantity", 1));
+  }
+  if (filters.q && filters.q.trim().length > 0) {
+    // O servidor mantém `searchText` desnormalizado: título + toy +
+    // collector. O índice fulltext da coleção (`ft_search`) cobre.
+    queries.push(Query.search("searchText", filters.q.trim()));
+  }
+  const result = await withServiceError(() =>
+    tablesDb.listRows<CollectionItemRow>({
+      databaseId: APPWRITE_DATABASE_ID,
+      tableId: TABLE.collectionItems,
+      queries,
+    })
+  );
+  const rows = result.rows ?? [];
+  const items = rows.map(rowToItemWithCar);
+  const last = rows[rows.length - 1];
+  const nextCursor = rows.length === pageSize && last ? last.$id : null;
+  return {
+    items,
+    total: isFirstPage ? result.total ?? items.length : null,
+    nextCursor,
+  };
+}
+
+/** Mantida por compat — a Fase 2 prefere `getCollectionPaged`. */
 export async function getCollection(
-  userId: string,
   filters: CollectionListFilters = {}
 ): Promise<CollectionItemWithCar[]> {
-  await simulateLatency();
-  const term = filters.q?.trim() ?? "";
-  return state.items
-    .filter((item) => item.userId === userId)
-    .filter((item) => (filters.duplicatesOnly ? item.quantity > 1 : true))
-    .map((item) => {
-      const car = carsMock.find((c) => c.id === item.carId);
-      if (!car) {
-        // Carro órfão: descartar silenciosamente. Em produção vira 404.
-        return null;
-      }
-      if (term && !matchesQuery(car, term)) return null;
-      return { ...item, car };
-    })
-    .filter((value): value is CollectionItemWithCar => value !== null);
+  const result = await getCollectionPaged({ ...filters, pageSize: 1000 });
+  return result.items;
 }
 
-/**
- * Resumo usado por Coleção e Perfil:
- * - `totalItems` = soma das quantidades;
- * - `totalModels` = carros distintos;
- * - `duplicates` = modelos com `quantity > 1` (alimenta o filtro Repetidos).
- */
-export async function getCollectionSummary(
-  userId: string
-): Promise<CollectionSummary> {
-  await simulateLatency();
-  const items = state.items.filter((item) => item.userId === userId);
-  return {
-    totalItems: items.reduce((sum, item) => sum + item.quantity, 0),
-    totalModels: items.length,
-    duplicates: items.filter((item) => item.quantity > 1).length,
-  };
-}
-
-/**
- * Adiciona uma unidade do carro à coleção. Se já existir, soma 1.
- * Retorna o item final (com `quantity` atualizada) para a UI confirmar
- * sem precisar de um `getCollection` extra.
- */
-export async function addToCollection(
-  userId: string,
-  carId: string
-): Promise<CollectionItem> {
-  await simulateLatency();
-  const existing = state.items.find(
-    (item) => item.userId === userId && item.carId === carId
-  );
-  if (existing) {
-    if (existing.quantity < 99) {
-      existing.quantity += 1;
-    }
-    return { ...existing };
+/** Resumo: `totalItems`, `totalModels`, `duplicates` (de `user_stats`). */
+export async function getCollectionSummary(): Promise<CollectionSummary> {
+  try {
+    const row = await withServiceError(() =>
+      tablesDb.getRow<UserStatsRow>({
+        databaseId: APPWRITE_DATABASE_ID,
+        tableId: TABLE.userStats,
+        rowId: "current",
+      })
+    );
+    return {
+      totalItems: row.totalItems,
+      totalModels: row.totalModels,
+      duplicates: row.duplicates,
+    };
+  } catch {
+    return { totalItems: 0, totalModels: 0, duplicates: 0 };
   }
-  const created: CollectionItem = {
-    id: nextId(),
-    userId,
-    carId,
-    quantity: 1,
-    createdAt: nowIso(),
-  };
-  state.items.push(created);
-  return { ...created };
 }
 
-/**
- * Remove o item inteiro da coleção (independente da quantidade).
- * Retorna `true` se removeu, `false` se não encontrou.
- */
-export async function removeFromCollection(
-  userId: string,
-  carId: string
-): Promise<boolean> {
-  await simulateLatency();
-  const before = state.items.length;
-  state.items = state.items.filter(
-    (item) => !(item.userId === userId && item.carId === carId)
+interface QuantityRow extends Models.Row {
+  carId: string;
+  quantity: number;
+}
+
+/** Quantidades de uma página (para os corações nas grids). */
+export async function getCollectionQuantities(
+  carIds: string[]
+): Promise<Record<string, number>> {
+  if (carIds.length === 0) return {};
+  const result = await withServiceError(() =>
+    tablesDb.listRows<QuantityRow>({
+      databaseId: APPWRITE_DATABASE_ID,
+      tableId: TABLE.collectionItems,
+      queries: [Query.equal("carId", carIds), Query.limit(carIds.length)],
+    })
   );
-  return state.items.length < before;
+  const map: Record<string, number> = {};
+  for (const row of result.rows ?? []) {
+    map[row.carId] = row.quantity;
+  }
+  return map;
 }
 
+/** Mantida por compat — usada em vários call sites. */
+export async function getCollectionQuantity(
+  carId: string
+): Promise<number> {
+  try {
+    const row = await withServiceError(() =>
+      tablesDb.getRow<QuantityRow>({
+        databaseId: APPWRITE_DATABASE_ID,
+        tableId: TABLE.collectionItems,
+        rowId: `ci_${carId}`,
+      })
+    );
+    return row.quantity;
+  } catch {
+    return 0;
+  }
+}
+
+/* ================================================================== */
+/*                          MUTAÇÕES                                     */
+/* ================================================================== */
+
+type CollectionActionResult = {
+  item: CollectionItem | null;
+  summary: CollectionSummary;
+};
+
 /**
- * Define a quantidade exata (mín 1, máx 99). Quantidade 0 remove o item.
- * Usado pelo QuantityStepper do detalhe (após o +/−) e da Coleção.
+ * Chama a Function `collection` síncrona. Body: `{ action, carId,
+ * quantity? }`. A resposta vem em `responseBody` como JSON
+ * `{ item, summary }`.
  */
+async function callCollectionFunction(
+  action: "add" | "set" | "remove",
+  carId: string,
+  quantity?: number
+): Promise<CollectionActionResult> {
+  const body = JSON.stringify({ action, carId, quantity });
+  const execution = await withServiceError(() =>
+    functions.createExecution({
+      functionId: APPWRITE_FUNCTION_COLLECTION,
+      body,
+      async: false,
+      method: ExecutionMethod.POST,
+    })
+  );
+  // 4xx/5xx da Function → AppwriteException.
+  if (execution.responseStatusCode >= 400) {
+    let payload: { error?: string } = {};
+    try {
+      payload = JSON.parse(execution.responseBody || "{}");
+    } catch {
+      // ignora — payload fica vazio.
+    }
+    const message = payload.error || `Erro ${execution.responseStatusCode}`;
+    throw new Error(message);
+  }
+  let parsed: CollectionActionResult = { item: null, summary: emptySummary() };
+  try {
+    parsed = JSON.parse(execution.responseBody || "{}");
+  } catch {
+    // sem body — fica com o summary vazio.
+  }
+  return {
+    item: parsed.item ?? null,
+    summary: parsed.summary ?? emptySummary(),
+  };
+}
+
+function emptySummary(): CollectionSummary {
+  return { totalItems: 0, totalModels: 0, duplicates: 0 };
+}
+
+/** Adiciona uma unidade. */
+export async function addToCollection(
+  carId: string
+): Promise<CollectionItem | null> {
+  const result = await callCollectionFunction("add", carId);
+  return result.item;
+}
+
+/** Define a quantidade (0 remove). */
 export async function setCollectionQuantity(
-  userId: string,
   carId: string,
   quantity: number
 ): Promise<CollectionItem | null> {
-  await simulateLatency();
-  const clamped = Math.max(0, Math.min(99, Math.floor(quantity)));
-  const existing = state.items.find(
-    (item) => item.userId === userId && item.carId === carId
-  );
-  if (clamped === 0) {
-    if (existing) {
-      state.items = state.items.filter((item) => item !== existing);
-    }
-    return null;
-  }
-  if (existing) {
-    existing.quantity = clamped;
-    return { ...existing };
-  }
-  const created: CollectionItem = {
-    id: nextId(),
-    userId,
-    carId,
-    quantity: clamped,
-    createdAt: nowIso(),
-  };
-  state.items.push(created);
-  return { ...created };
+  const result = await callCollectionFunction("set", carId, quantity);
+  return result.item;
 }
 
-/**
- * Quantidade atual de um carro na coleção. Usado pelo coração dos
- * cards (Home/Busca) e pela tela de detalhe (badge flame "Repetido"
- * + CollectionPanel).
- */
-export async function getCollectionQuantity(
-  userId: string,
+/** Remove o item inteiro. */
+export async function removeFromCollection(
   carId: string
-): Promise<number> {
-  await simulateLatency();
-  return (
-    state.items.find(
-      (item) => item.userId === userId && item.carId === carId
-    )?.quantity ?? 0
-  );
+): Promise<boolean> {
+  await callCollectionFunction("remove", carId);
+  return true;
 }

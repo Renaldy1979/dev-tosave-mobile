@@ -1,51 +1,110 @@
-import { usersMock } from "@/mocks";
+import {
+  account,
+  withServiceError,
+  ServiceError,
+} from "./_appwrite";
+import {
+  getCurrentSession,
+  setCurrentSession,
+} from "./_session";
 import type { User } from "@/types";
-import { simulateLatency } from "./_delay";
-import { state as authState } from "./auth";
 
 /**
- * `users.updateProfile({ name, email })` da spec de dados (README.md).
+ * `users.updateProfile` da spec de dados (fase 2 com Appwrite).
  *
- * Atualiza o usuário em memória (a fase 2 persiste no portal web) e
- * mantém a sessão sincronizada. Validação leve é feita no service;
- * a tela exibe mensagens mais ricas.
+ * - Nome: `account.updateName({ name })`.
+ * - E-mail: `account.updateEmail({ email, password })`. O Appwrite
+ *   exige a senha atual quando o e-mail muda. A tela passa `password`
+ *   no input.
  *
  * Não toca em `role`, `status` ou `expo_push_token` — esses são
- * responsabilidade do portal.
+ * responsabilidade do portal (fase 3).
  */
 export interface UpdateProfileInput {
   name: string;
   email: string;
+  password?: string;
 }
+
+export type UpdateProfileError =
+  | "password_required"
+  | "invalid_password"
+  | "email_in_use"
+  | "network"
+  | "unknown";
 
 export type UpdateProfileResult =
   | { ok: true; user: User }
-  | { ok: false; error: "email_in_use" | "unknown" };
+  | { ok: false; error: UpdateProfileError };
+
+interface AppwriteUser {
+  $id: string;
+  name?: string;
+  email?: string;
+  status?: boolean;
+  prefs?: Record<string, unknown>;
+}
+
+function toAppUser(u: AppwriteUser): User {
+  return {
+    id: u.$id,
+    name: u.name ?? u.email ?? "",
+    email: u.email ?? "",
+    role: "COLLECTOR",
+    status: u.status === false ? "blocked" : "active",
+    expo_push_token:
+      typeof u.prefs?.expoPushToken === "string" ? u.prefs.expoPushToken : null,
+  };
+}
 
 export async function updateProfile(
   input: UpdateProfileInput
 ): Promise<UpdateProfileResult> {
-  await simulateLatency();
-  const trimmedName = input.name.trim();
-  const trimmedEmail = input.email.trim().toLowerCase();
-  if (trimmedName.length < 2 || trimmedName.length > 60) {
-    return { ok: false, error: "unknown" };
-  }
-  // "email_in_use" só seria usado se houvesse outro usuário — neste
-  // mock há um único usuário, então o erro cai em `unknown` em outros
-  // casos. Mantemos o discriminador para alinhar com a fase 2.
-  const current = authState.session.user;
+  const current = getCurrentSession().user;
   if (!current) {
     return { ok: false, error: "unknown" };
   }
-  const idx = usersMock.findIndex((u) => u.id === current.id);
-  if (idx < 0) return { ok: false, error: "unknown" };
-  const updated: User = {
-    ...usersMock[idx],
-    name: trimmedName,
-    email: trimmedEmail,
-  };
-  usersMock[idx] = updated;
-  authState.session = { user: updated };
-  return { ok: true, user: updated };
+
+  try {
+    // Nome primeiro (separado do e-mail).
+    if (input.name.trim() !== current.name) {
+      await withServiceError(() =>
+        account.updateName({ name: input.name.trim() })
+      );
+    }
+    // E-mail só se mudou e senha foi fornecida.
+    if (
+      input.email.trim().toLowerCase() !== current.email.toLowerCase()
+    ) {
+      if (!input.password) {
+        return { ok: false, error: "password_required" };
+      }
+      try {
+        await withServiceError(() =>
+          account.updateEmail({
+            email: input.email.trim().toLowerCase(),
+            password: input.password as string,
+          })
+        );
+      } catch (err) {
+        const e = err as { code?: number; message?: string };
+        if (e?.code === 401) return { ok: false, error: "invalid_password" };
+        if (e?.code === 409) return { ok: false, error: "email_in_use" };
+        if (err instanceof ServiceError && err.code === "network") {
+          return { ok: false, error: "network" };
+        }
+        return { ok: false, error: "unknown" };
+      }
+    }
+    // Recarrega o usuário atualizado.
+    const updated = await withServiceError(() => account.get()).catch(() => null);
+    const user = updated ? toAppUser(updated as AppwriteUser) : { ...current, name: input.name.trim(), email: input.email.trim().toLowerCase() };
+    setCurrentSession({ user });
+    return { ok: true, user };
+  } catch (err) {
+    if (err instanceof ServiceError && err.code === "network") {
+      return { ok: false, error: "network" };
+    }
+    return { ok: false, error: "unknown" };
+  }
 }

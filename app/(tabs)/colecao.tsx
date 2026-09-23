@@ -200,7 +200,7 @@ export default function Colecao() {
             action: {
               label: "Desfazer",
               onPress: async () => {
-                await setCollectionQuantity(user.id, carId, previous);
+                await setCollectionQuantity(carId, previous);
                 await collection.refresh();
               },
             },

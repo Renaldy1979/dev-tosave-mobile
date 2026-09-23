@@ -1,10 +1,15 @@
 import {
-  attributesMock,
-  brandsMock,
-  carImagesMock,
-  carsMock,
-  seriesMock,
-} from "@/mocks";
+  tablesDb,
+  storage,
+  APPWRITE_DATABASE_ID,
+  APPWRITE_BUCKET_IMAGES,
+  APPWRITE_FUNCTION_COLLECTION,
+  withServiceError,
+  Query,
+} from "./_appwrite";
+import type { Models } from "react-native-appwrite";
+import { ImageFormat } from "react-native-appwrite";
+import { withServiceError as withServiceErr } from "./_appwrite";
 import type {
   Attribute,
   Brand,
@@ -14,271 +19,524 @@ import type {
   CarListItem,
   Serie,
 } from "@/types";
-import { simulateLatency } from "./_delay";
+
+const Webp: ImageFormat = "webp" as ImageFormat;
 
 /**
- * Normaliza uma string para busca textual: minúsculas e sem acentos.
- * Usado para casar `q` com `title`, `toy` e `collector` ignorando
- * variações de caixa e acentuação.
- */
-function normalize(value: string): string {
-  return value
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
-}
-
-/**
- * Aplica os filtros de `CarFilters` a uma lista de carros. Extraído
- * para reuso entre `listCars`, `countCars` e `listBySerie`.
- */
-function applyFilters(cars: Car[], filters: CarFilters): Car[] {
-  const rawQuery = filters.q?.trim();
-  const term = rawQuery ? normalize(rawQuery.replace(/^#/, "")) : null;
-
-  return cars.filter((car) => {
-    if (term && rawQuery) {
-      // Prioridade para o termo ser o `toy` exato (>= 4 chars, alfanumérico)
-      // — espelha o comportamento descrito em `04-busca-filtros.md §3`.
-      const alfanum = rawQuery.replace(/^#/, "");
-      const isExactToy =
-        alfanum.length >= 4 &&
-        /^[a-z0-9]+$/i.test(alfanum) &&
-        car.toy.toLowerCase() === alfanum.toLowerCase();
-      const collectorMatch = normalize(car.collector) === term;
-      const titleMatch = normalize(car.title).includes(term);
-      if (!isExactToy && !collectorMatch && !titleMatch) {
-        return false;
-      }
-    }
-
-    if (filters.serieId && car.serieId !== filters.serieId) {
-      return false;
-    }
-    if (filters.brandId && car.brandId !== filters.brandId) {
-      return false;
-    }
-    if (filters.years && filters.years.length > 0 && !filters.years.includes(car.year)) {
-      return false;
-    }
-    if (filters.attributeIds && filters.attributeIds.length > 0) {
-      // AND entre atributos: o carro precisa ter todos os atributos
-      // marcados. Os atributos por carro estão em `carAttributesMock`.
-      const carAttrIds = new Set(
-        carAttributesByCarId[car.id]?.map((a) => a.id) ?? []
-      );
-      for (const attrId of filters.attributeIds) {
-        if (!carAttrIds.has(attrId)) {
-          return false;
-        }
-      }
-    }
-    return true;
-  });
-}
-
-/**
- * Associação carro → atributos. Mantida em escopo de módulo para que
- * `applyFilters` não precise varrer `carAttributesMock` por linha.
- */
-import { carAttributesMock } from "@/mocks/carAttributes";
-
-const carAttributesByCarId: Record<string, { id: string }[]> =
-  carAttributesMock.reduce<Record<string, { id: string }[]>>((acc, link) => {
-    (acc[link.carId] ??= []).push({ id: link.attributeId });
-    return acc;
-  }, {});
-
-/**
- * Lista de carros com filtros opcionais. `q` busca por `title`, `toy`
- * e `collector`; demais filtros casam exato.
- */
-export async function listCars(filters: CarFilters = {}): Promise<Car[]> {
-  await simulateLatency();
-  const filtered = applyFilters(carsMock, filters);
-  // Ordena por ano desc e depois título asc — base estável para a grid.
-  return [...filtered].sort((a, b) => {
-    if (b.year !== a.year) return b.year - a.year;
-    return a.title.localeCompare(b.title);
-  });
-}
-
-/**
- * Resposta paginada para grids (Home, Busca, Coleção).
- * - `items`: `CarListItem` (já com `brandName` e `serieTitle`).
- * - `total`: total de itens que casam o filtro (para contagem).
- * - `page`: número da página devolvida (1-based).
+ * Catálogo — fase 2, Appwrite TablesDB.
  *
- * `pageSize` padrão = 20 (alinhado com a spec da Home).
+ * Tabelas: `cars`, `brands`, `series`, `attributes`, `catalog_meta`.
+ * Imagens via `storage.getFilePreviewURL` (bucket `car-images`).
+ *
+ * Paginação por cursor (sem `offset`). `total` só na 1ª página;
+ * o Appwrite para em 5.000, então para o catálogo sem filtro usamos
+ * `catalog_meta.totalCars`. `years` vem de `catalog_meta.years[]`.
  */
-export interface PaginatedCars {
-  items: CarListItem[];
-  total: number;
-  page: number;
+
+const TABLE = {
+  cars: "cars",
+  brands: "brands",
+  series: "series",
+  attributes: "attributes",
+  carImages: "car_images",
+  catalogMeta: "catalog_meta",
+} as const;
+
+/* ================================================================== */
+/*                          TIPOS DO APPWRITE                            */
+/* ================================================================== */
+
+interface CarRow extends Models.Row {
+  title: string;
+  description?: string;
+  brandId: string;
+  brandName: string;
+  serieId: string;
+  serieTitle: string;
+  seriePosition?: string;
+  seriePositionNum?: number;
+  collector: string;
+  color?: string;
+  toy: string;
+  year: number;
+  scale: string;
+  imageFileId?: string | null;
+  attributeIds?: string[];
+  searchText?: string;
 }
 
-export interface ListCarsPagedOptions extends CarFilters {
-  page?: number;
-  pageSize?: number;
+interface BrandRow extends Models.Row {
+  name: string;
+  state: "ativa" | "descontinuada" | "em_analise";
+  imageFileId?: string | null;
+  active: boolean;
+  carCount?: number;
 }
 
-function toListItem(car: Car): CarListItem {
+interface SeriesRow extends Models.Row {
+  title: string;
+  description?: string;
+  imageFileId?: string | null;
+  isDefault: boolean;
+  carCount?: number;
+}
+
+interface AttributeRow extends Models.Row {
+  title: string;
+  description?: string;
+}
+
+interface CatalogMetaRow extends Models.Row {
+  totalCars: number;
+  years: number[];
+}
+
+interface CarImageRow extends Models.Row {
+  carId: string;
+  fileId: string;
+  position: number;
+}
+
+/* ================================================================== */
+/*                            CONVERSORES                               */
+/* ================================================================== */
+
+export function carRowToListItem(row: CarRow): CarListItem {
   return {
-    ...car,
-    brandName: brandsMock.find((b) => b.id === car.brandId)?.name ?? "",
-    serieTitle: seriesMock.find((s) => s.id === car.serieId)?.title ?? "",
+    id: row.$id,
+    title: row.title,
+    description: row.description ?? "",
+    brandId: row.brandId,
+    brandName: row.brandName,
+    serieId: row.serieId,
+    serieTitle: row.serieTitle,
+    collector: row.collector ?? "",
+    color: row.color ?? "",
+    toy: row.toy ?? "",
+    year: row.year,
+    scale: row.scale,
+    imagemFull: row.imageFileId
+      ? imageUrl(row.imageFileId, 1080, 85)
+      : null,
+    imagemThumb: row.imageFileId
+      ? imageUrl(row.imageFileId, 400, 75)
+      : null,
+    seriePosition: row.seriePosition ?? null,
+    createdAt: row.$createdAt ?? "",
+    updatedAt: row.$updatedAt ?? "",
   };
 }
 
-export async function listCarsPaged(
-  options: ListCarsPagedOptions = {}
-): Promise<PaginatedCars> {
-  await simulateLatency();
-  const { page = 1, pageSize = 20, ...filters } = options;
-  const filtered = applyFilters(carsMock, filters).sort((a, b) => {
+export type { CarRow };
+
+function carRowToCar(row: CarRow): Car {
+  return carRowToListItem(row);
+}
+
+function imageUrl(fileId: string, width: number, quality: number): string {
+  return storage
+    .getFilePreviewURL(
+      APPWRITE_BUCKET_IMAGES,
+      fileId,
+      width,
+      0, // sem recorte
+      undefined,
+      quality,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      Webp
+    )
+    .toString();
+}
+
+function brandRowToBrand(row: BrandRow): Brand {
+  return {
+    id: row.$id,
+    name: row.name,
+    state: row.state,
+    image: row.imageFileId ? imageUrl(row.imageFileId, 256, 80) : "",
+    active: row.active,
+    createdAt: "",
+  };
+}
+
+function seriesRowToSerie(row: SeriesRow): Serie {
+  const s: Serie = {
+    id: row.$id,
+    title: row.title,
+    description: row.description ?? "",
+    imagem: row.imageFileId ? imageUrl(row.imageFileId, 800, 80) : "",
+    isDefault: row.isDefault,
+    createdAt: "",
+  };
+  // `Serie` não tem `carCount` no tipo do app; devolvemos via prop
+  // anexada quando relevante (consumidores pegam de `series.find`).
+  // Para manter a forma do app, devolvemos um clone com a prop
+  // extra; os consumidores (`Home`/`Busca`) só usam `id`/`title`/
+  // `imageFileId`.
+  return Object.assign(s, { carCount: row.carCount ?? 0 });
+}
+
+function attributeRowToAttribute(row: AttributeRow): Attribute {
+  return {
+    id: row.$id,
+    title: row.title,
+    description: row.description ?? "",
+  };
+}
+
+/* ================================================================== */
+/*                            LISTAGENS                                  */
+/* ================================================================== */
+
+/** Lista todos os carros com filtros opcionais (sem paginação). */
+export async function listCars(filters: CarFilters = {}): Promise<Car[]> {
+  const queries = buildCarQueries(filters);
+  // Para o spec atual a Home/Busca usam listCarsPaged. Esta função
+  // permanece para compatibilidade.
+  const result = await withServiceErr(() =>
+    tablesDb.listRows<CarRow>({
+      databaseId: APPWRITE_DATABASE_ID,
+      tableId: TABLE.cars,
+      queries,
+    })
+  );
+  const items = (result.rows ?? []).map(carRowToCar);
+  items.sort((a, b) => {
     if (b.year !== a.year) return b.year - a.year;
     return a.title.localeCompare(b.title);
   });
-  const start = (page - 1) * pageSize;
-  const items = filtered.slice(start, start + pageSize).map(toListItem);
-  return { items, total: filtered.length, page };
+  return items;
 }
 
-/**
- * Versão paginada de `listBySerie` que devolve `CarListItem`. Usada
- * pela faixa "Mais da série" no detalhe.
- */
+/** Resposta paginada para grids. `total` só na 1ª página. */
+export interface PaginatedCars {
+  items: CarListItem[];
+  /** Total só na 1ª página; null nas demais (Appwrite para em 5000). */
+  total: number | null;
+  /** Cursor da próxima página; null quando acabou. */
+  nextCursor: string | null;
+}
+
+export interface ListCarsPagedOptions extends CarFilters {
+  cursor?: string;
+  pageSize?: number;
+}
+
+/** Lista carros paginado por cursor, conforme §9 do contrato. */
+export async function listCarsPaged(
+  options: ListCarsPagedOptions = {}
+): Promise<PaginatedCars> {
+  const pageSize = options.pageSize ?? 20;
+  const isFirstPage = !options.cursor;
+  const baseQueries = buildCarQueries(options);
+  const queries = [
+    Query.orderDesc("year"),
+    Query.orderAsc("title"),
+    Query.limit(pageSize),
+    ...(options.cursor ? [Query.cursorAfter(options.cursor)] : []),
+    ...baseQueries,
+  ];
+  const result = await withServiceErr(() =>
+    tablesDb.listRows<CarRow>({
+      databaseId: APPWRITE_DATABASE_ID,
+      tableId: TABLE.cars,
+      queries,
+    })
+  );
+  const rows = result.rows ?? [];
+  const items = rows.map(carRowToListItem);
+
+  let total: number | null = null;
+  if (isFirstPage) {
+    // Sem filtro: o `total` do Appwrite para em 5000. Usamos
+    // `catalog_meta.totalCars` como total real do catálogo.
+    if (options.q || options.serieId || options.brandId || (options.years && options.years.length > 0) || (options.attributeIds && options.attributeIds.length > 0)) {
+      // Filtrado: o `total` do Appwrite (até 5000) serve para o resumo.
+      total = result.total ?? items.length;
+    } else {
+      total = await getCatalogTotalCars();
+    }
+  }
+
+  const last = rows[rows.length - 1];
+  const nextCursor = rows.length === pageSize && last ? last.$id : null;
+
+  return { items, total, nextCursor };
+}
+
+/** "Mais da série" no detalhe. */
 export async function listBySeriePaged(
   serieId: string,
-  options: { excludeId?: string; page?: number; pageSize?: number } = {}
+  options: { excludeId?: string; cursor?: string; pageSize?: number } = {}
 ): Promise<PaginatedCars> {
-  await simulateLatency();
-  const { excludeId, page = 1, pageSize = 10 } = options;
-  const filtered = carsMock
-    .filter((car) => car.serieId === serieId && car.id !== excludeId)
-    .sort((a, b) => {
-      if (a.seriePosition && b.seriePosition) {
-        return a.seriePosition.localeCompare(b.seriePosition);
-      }
-      return a.title.localeCompare(b.title);
-    });
-  const start = (page - 1) * pageSize;
-  const items = filtered.slice(start, start + pageSize).map(toListItem);
-  return { items, total: filtered.length, page };
+  const pageSize = options.pageSize ?? 10;
+  const queries: string[] = [
+    Query.equal("serieId", serieId),
+    Query.orderAsc("seriePositionNum"),
+    Query.orderAsc("title"),
+    Query.limit(pageSize),
+  ];
+  if (options.excludeId) {
+    queries.push(Query.notEqual("$id", options.excludeId));
+  }
+  if (options.cursor) {
+    queries.push(Query.cursorAfter(options.cursor));
+  }
+  const result = await withServiceErr(() =>
+    tablesDb.listRows<CarRow>({
+      databaseId: APPWRITE_DATABASE_ID,
+      tableId: TABLE.cars,
+      queries,
+    })
+  );
+  const items = (result.rows ?? []).map(carRowToListItem);
+  const last = (result.rows ?? [])[(result.rows ?? []).length - 1];
+  const nextCursor =
+    (result.rows ?? []).length === pageSize && last ? last.$id : null;
+  return { items, total: result.total ?? items.length, nextCursor };
 }
 
-/**
- * Contagem de carros para o filtro aplicado. A UI usa para mostrar
- * "312 miniaturas" e alimentar o botão "Ver N resultados" do sheet.
- */
+/** Contagem dos carros que casam o filtro (1ª página só). */
 export async function countCars(filters: CarFilters = {}): Promise<number> {
-  await simulateLatency();
-  return applyFilters(carsMock, filters).length;
+  const queries = buildCarQueries(filters);
+  const result = await withServiceErr(() =>
+    tablesDb.listRows<CarRow>({
+      databaseId: APPWRITE_DATABASE_ID,
+      tableId: TABLE.cars,
+      queries: [...queries, Query.limit(1)],
+    })
+  );
+  return result.total ?? 0;
 }
 
-/**
- * Lista os anos disponíveis no catálogo, em ordem decrescente.
- * Alimenta o filtro "Ano" do FilterSheet (multi-seleção, OR).
- */
+/** Anos disponíveis no catálogo (vem de `catalog_meta.years`). */
 export async function listYears(): Promise<number[]> {
-  await simulateLatency();
-  const years = new Set(carsMock.map((car) => car.year));
-  return [...years].sort((a, b) => b - a);
+  const result = await withServiceErr(() =>
+    tablesDb.listRows<CatalogMetaRow>({
+      databaseId: APPWRITE_DATABASE_ID,
+      tableId: TABLE.catalogMeta,
+      queries: [Query.equal("$id", "global")],
+    })
+  );
+  const row = (result.rows ?? [])[0];
+  if (row) return [...row.years].sort((a, b) => b - a);
+  return [];
 }
 
+/** Detalhe de um carro: row + imagens da galeria. */
 export async function getCarById(id: string): Promise<CarDetail | null> {
-  await simulateLatency();
-  const car = carsMock.find((c) => c.id === id);
-  if (!car) return null;
+  const carRow = await withServiceErr(() =>
+    tablesDb.getRow<CarRow>({
+      databaseId: APPWRITE_DATABASE_ID,
+      tableId: TABLE.cars,
+      rowId: id,
+    })
+  ).catch(() => null);
+  if (!carRow) return null;
 
-  const brand = brandsMock.find((b) => b.id === car.brandId);
-  const serie = seriesMock.find((s) => s.id === car.serieId);
-  if (!brand || !serie) return null;
+  // Marca / série / atributos.
+  const [brandRow, serieRow, attrRows] = await Promise.all([
+    withServiceErr(() =>
+      tablesDb.getRow<BrandRow>({
+        databaseId: APPWRITE_DATABASE_ID,
+        tableId: TABLE.brands,
+        rowId: carRow.brandId,
+      })
+    ).catch(() => null),
+    withServiceErr(() =>
+      tablesDb.getRow<SeriesRow>({
+        databaseId: APPWRITE_DATABASE_ID,
+        tableId: TABLE.series,
+        rowId: carRow.serieId,
+      })
+    ).catch(() => null),
+    (async () => {
+      const ids = carRow.attributeIds ?? [];
+      if (ids.length === 0) return [] as AttributeRow[];
+      const result = await withServiceErr(() =>
+        tablesDb.listRows<AttributeRow>({
+          databaseId: APPWRITE_DATABASE_ID,
+          tableId: TABLE.attributes,
+          queries: [Query.equal("$id", ids)],
+        })
+      );
+      return result.rows ?? [];
+    })(),
+  ]);
 
-  const attributes = carAttributesMock
-    .filter((link) => link.carId === car.id)
-    .map((link) => attributesMock.find((a) => a.id === link.attributeId))
-    .filter((a): a is Attribute => Boolean(a));
+  if (!brandRow || !serieRow) return null;
 
-  const images = carImagesMock
-    .filter((img) => img.carId === car.id)
-    .sort((a, b) => a.position - b.position);
+  // Galeria extra (posição ≥ 1). `car_images` está vazia na fase 2.
+  const imagesResult = await withServiceErr(() =>
+    tablesDb.listRows<CarImageRow>({
+      databaseId: APPWRITE_DATABASE_ID,
+      tableId: TABLE.carImages,
+      queries: [
+        Query.equal("carId", id),
+        Query.orderAsc("position"),
+      ],
+    })
+  ).catch(() => ({ rows: [] }));
+  const images = (imagesResult.rows ?? []).map((img) => ({
+    id: img.$id,
+    carId: img.carId,
+    fileId: img.fileId,
+    path: imageUrl(img.fileId, 1080, 85),
+    position: img.position,
+  }));
 
   return {
-    ...car,
-    brand,
-    serie,
-    attributes,
+    ...carRowToListItem(carRow),
+    brand: brandRowToBrand(brandRow),
+    serie: seriesRowToSerie(serieRow),
+    attributes: attrRows.map(attributeRowToAttribute),
     images,
   };
 }
 
-/**
- * Outros carros da mesma série, para a faixa "Mais da série" no detalhe.
- * `excludeId` remove o carro atual; `limit` define o tamanho da faixa.
- */
+/** Outros carros da mesma série (sem paginação, até `limit`). */
 export async function listBySerie(
   serieId: string,
   options: { excludeId?: string; limit?: number } = {}
 ): Promise<Car[]> {
-  await simulateLatency();
-  const { excludeId, limit = 10 } = options;
-  return carsMock
-    .filter((car) => car.serieId === serieId && car.id !== excludeId)
-    .sort((a, b) => {
-      // Posição na série quando disponível; cai para título asc.
-      if (a.seriePosition && b.seriePosition) {
-        return a.seriePosition.localeCompare(b.seriePosition);
-      }
-      return a.title.localeCompare(b.title);
+  const queries: string[] = [
+    Query.equal("serieId", serieId),
+    Query.orderAsc("seriePositionNum"),
+    Query.orderAsc("title"),
+    Query.limit(options.limit ?? 10),
+  ];
+  if (options.excludeId) {
+    queries.push(Query.notEqual("$id", options.excludeId));
+  }
+  const result = await withServiceErr(() =>
+    tablesDb.listRows<CarRow>({
+      databaseId: APPWRITE_DATABASE_ID,
+      tableId: TABLE.cars,
+      queries,
     })
-    .slice(0, limit);
+  );
+  return (result.rows ?? []).map(carRowToCar);
 }
 
-// ---------- Séries ----------
-
-/**
- * Lista séries. Com `featured: true`, devolve só as marcadas como
- * destaque (`isDefault`). É a forma unificada pedida pelo
- * `README.md` ("contrato de dados das telas").
- */
-export async function listSeries(options: { featured?: boolean } = {}): Promise<Serie[]> {
-  await simulateLatency();
-  if (options.featured) return seriesMock.filter((serie) => serie.isDefault);
-  return [...seriesMock];
+/** Séries (com `carCount` já preenchido pelo backend). */
+export async function listSeries(
+  options: { featured?: boolean } = {}
+): Promise<Serie[]> {
+  const queries = options.featured
+    ? [Query.equal("isDefault", true), Query.orderAsc("title"), Query.limit(500)]
+    : [Query.orderAsc("title"), Query.limit(500)];
+  const result = await withServiceErr(() =>
+    tablesDb.listRows<SeriesRow>({
+      databaseId: APPWRITE_DATABASE_ID,
+      tableId: TABLE.series,
+      queries,
+    })
+  );
+  return (result.rows ?? []).map(seriesRowToSerie);
 }
 
-/** Mantida por compatibilidade com chamadas existentes. */
+/** Mantida por compatibilidade. */
 export async function listFeaturedSeries(): Promise<Serie[]> {
-  await simulateLatency();
-  return seriesMock.filter((serie) => serie.isDefault);
+  return listSeries({ featured: true });
 }
 
-// ---------- Marcas ----------
-
+/** Marcas (todas ativas, conforme §3.2). */
 export async function listBrands(): Promise<Brand[]> {
-  await simulateLatency();
-  return [...brandsMock];
+  const result = await withServiceErr(() =>
+    tablesDb.listRows<BrandRow>({
+      databaseId: APPWRITE_DATABASE_ID,
+      tableId: TABLE.brands,
+      queries: [
+        Query.notEqual("state", "em_analise"),
+        Query.orderAsc("name"),
+        Query.limit(500),
+      ],
+    })
+  );
+  return (result.rows ?? []).map(brandRowToBrand);
 }
 
-// ---------- Atributos ----------
-
+/** Atributos. */
 export async function listAttributes(): Promise<Attribute[]> {
-  await simulateLatency();
-  return [...attributesMock];
+  const result = await withServiceErr(() =>
+    tablesDb.listRows<AttributeRow>({
+      databaseId: APPWRITE_DATABASE_ID,
+      tableId: TABLE.attributes,
+      queries: [Query.orderAsc("title"), Query.limit(500)],
+    })
+  );
+  return (result.rows ?? []).map(attributeRowToAttribute);
 }
-
-// ---------- Auxiliar para a Home ----------
 
 /**
- * Quantos carros pertencem a cada série — usado pelo SeriesCard para
- * mostrar "12 miniaturas" sob o título. Mantido no service porque
- * o dado é derivado do join carros × séries.
+ * CarCount por série: a coluna `series.carCount` já vem preenchida
+ * pelo `catalog-sync` (§6). Esta função só consulta — sem `count`.
  */
 export async function getSeriesCarCount(): Promise<Record<string, number>> {
-  await simulateLatency();
-  return carsMock.reduce<Record<string, number>>((acc, car) => {
-    acc[car.serieId] = (acc[car.serieId] ?? 0) + 1;
-    return acc;
-  }, {});
+  const result = await withServiceErr(() =>
+    tablesDb.listRows<SeriesRow>({
+      databaseId: APPWRITE_DATABASE_ID,
+      tableId: TABLE.series,
+      queries: [Query.limit(500)],
+    })
+  );
+  const map: Record<string, number> = {};
+  for (const row of result.rows ?? []) {
+    map[row.$id] = row.carCount ?? 0;
+  }
+  return map;
+}
+
+/* ================================================================== */
+/*                          HELPERS PRIVADOS                           */
+/* ================================================================== */
+
+async function getCatalogTotalCars(): Promise<number> {
+  const result = await withServiceErr(() =>
+    tablesDb.listRows<CatalogMetaRow>({
+      databaseId: APPWRITE_DATABASE_ID,
+      tableId: TABLE.catalogMeta,
+      queries: [Query.equal("$id", "global")],
+    })
+  );
+  const row = (result.rows ?? [])[0];
+  return row?.totalCars ?? 0;
+}
+
+/**
+ * Monta as queries do Appwrite a partir de um `CarFilters`. A busca
+ * usa `Query.search` no índice fulltext `ft_search` (que combina
+ * título + toy + collector em `searchText`). Atributos viram um
+ * `Query.contains` por atributo (AND entre eles).
+ */
+function buildCarQueries(filters: CarFilters): string[] {
+  const queries: string[] = [];
+
+  if (filters.q && filters.q.trim().length > 0) {
+    const term = filters.q.trim().replace(/^#/, "");
+    queries.push(Query.search("searchText", term));
+  }
+
+  if (filters.serieId) {
+    queries.push(Query.equal("serieId", filters.serieId));
+  }
+  if (filters.brandId) {
+    queries.push(Query.equal("brandId", filters.brandId));
+  }
+  if (filters.years && filters.years.length > 0) {
+    queries.push(Query.equal("year", filters.years));
+  }
+  if (filters.attributeIds && filters.attributeIds.length > 0) {
+    // Um `Query.contains` por atributo → AND entre eles.
+    for (const id of filters.attributeIds) {
+      queries.push(Query.contains("attributeIds", [id]));
+    }
+  }
+
+  return queries;
 }

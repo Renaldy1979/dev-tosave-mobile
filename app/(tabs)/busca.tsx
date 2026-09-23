@@ -115,8 +115,6 @@ export default function Busca() {
 
   // ----- Resultados -----
   const [items, setItems] = useState<CarListItem[]>([]);
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
   const [gridState, setGridState] = useState<"loading" | "ok" | "error" | "empty">("loading");
   const [exactToyMatch, setExactToyMatch] = useState<CarListItem | null>(null);
   // `showAll` é ligado pelo botão "Todas as miniaturas" do estado
@@ -173,18 +171,21 @@ export default function Busca() {
   }, [loadOptions]);
 
   // ----- Carga dos resultados -----
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [total, setTotal] = useState<number>(0);
+
   const loadResults = useCallback(
-    async (pageToLoad: number, replace: boolean) => {
-      setGridState((prev) => (pageToLoad === 1 ? "loading" : "ok"));
+    async (cursorToLoad: string | null, replace: boolean) => {
+      setGridState((prev) => (cursorToLoad === null ? "loading" : "ok"));
       try {
         const result = await listCarsPaged({
           ...filters,
-          page: pageToLoad,
+          cursor: cursorToLoad ?? undefined,
           pageSize: PAGE_SIZE,
         });
         setItems((prev) => (replace ? result.items : [...prev, ...result.items]));
-        setTotal(result.total);
-        setPage(result.page);
+        setTotal(result.total ?? 0);
+        setCursor(result.nextCursor);
         setGridState(result.items.length === 0 ? "empty" : "ok");
       } catch {
         setGridState("error");
@@ -194,7 +195,7 @@ export default function Busca() {
   );
 
   useEffect(() => {
-    void loadResults(1, true);
+    void loadResults(null, true);
   }, [loadResults]);
 
   // ----- Exact toy match -----
@@ -310,8 +311,8 @@ export default function Busca() {
   // ----- Ações -----
   const handleEndReached = () => {
     if (gridState !== "ok") return;
-    if (items.length >= total) return;
-    void loadResults(page + 1, false);
+    if (!cursor) return;
+    void loadResults(cursor, false);
   };
 
   const handleToggleCollection = useCallback(
@@ -455,7 +456,7 @@ export default function Busca() {
             <RefreshControl
               tintColor={c("primary")}
               refreshing={false}
-              onRefresh={() => loadResults(1, true)}
+              onRefresh={() => loadResults(null, true)}
             />
           }
         >
@@ -495,7 +496,7 @@ export default function Busca() {
             onSelectBrand={(id) => router.setParams({ brand: id })}
             onShowAll={() => {
               setShowAll(true);
-              void loadResults(1, true);
+              void loadResults(null, true);
             }}
           />
         </Animated.ScrollView>
@@ -511,7 +512,7 @@ export default function Busca() {
             <RefreshControl
               tintColor={c("primary")}
               refreshing={false}
-              onRefresh={() => loadResults(1, true)}
+              onRefresh={() => loadResults(null, true)}
             />
           }
           ListHeaderComponent={
@@ -591,7 +592,7 @@ export default function Busca() {
               loaded={items.length}
               columns={columns}
               hasFilters={activeFiltersTotal > 0 || term.trim().length > 0}
-              onRetry={() => loadResults(1, true)}
+              onRetry={() => loadResults(null, true)}
               onClear={() => {
                 setTerm("");
                 handleClear();

@@ -92,8 +92,8 @@ export function CollectionProvider({ children }: CollectionProviderProps) {
     }
     try {
       const [list, sum] = await Promise.all([
-        getCollection(user.id),
-        getCollectionSummary(user.id),
+        getCollection(),
+        getCollectionSummary(),
       ]);
       const map: Record<string, number> = {};
       const cars: Record<string, Car> = {};
@@ -136,9 +136,9 @@ export function CollectionProvider({ children }: CollectionProviderProps) {
       setVersion((v) => v + 1);
       try {
         if (next === 0) {
-          await removeFromCollection(user.id, carId);
+          await removeFromCollection(carId);
         } else {
-          await addToCollection(user.id, carId);
+          await addToCollection(carId);
         }
       } catch {
         setItems((cur) => {
@@ -171,7 +171,7 @@ export function CollectionProvider({ children }: CollectionProviderProps) {
       });
       setVersion((v) => v + 1);
       try {
-        await setCollectionQuantity(user.id, carId, quantity);
+        await setCollectionQuantity(carId, quantity);
       } catch {
         setItems((cur) => {
           const updated = { ...cur };
@@ -202,7 +202,7 @@ export function CollectionProvider({ children }: CollectionProviderProps) {
       });
       setVersion((v) => v + 1);
       try {
-        await removeFromCollection(user.id, carId);
+        await removeFromCollection(carId);
       } catch {
         setItems((cur) => {
           const updated = { ...cur };
