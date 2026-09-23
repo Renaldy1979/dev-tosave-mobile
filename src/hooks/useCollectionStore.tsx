@@ -15,7 +15,7 @@ import {
   setCollectionQuantity,
 } from "@/services/collection";
 import { useCurrentUser } from "./useCurrentUser";
-import type { CollectionSummary } from "@/types";
+import type { Car, CollectionItemWithCar, CollectionSummary } from "@/types";
 
 /**
  * Store compartilhado da coleção (`docs/ESPECIFICACAO-MOBILE.md` — store
@@ -24,13 +24,22 @@ import type { CollectionSummary } from "@/types";
  * a contagem e o estado de cada item ficam coerentes sem precisar de
  * fetch em cada tela.
  *
- * Carregamento inicial: ao logar ou montar, faz `getCollection(userId)`
- * e popula o mapa + summary. Operações (`add`, `remove`, `setQuantity`,
- * `toggle`) atualizam o store otimista e revalidam com o service.
+ * Carregamento: reage ao `user` do `useCurrentUser` (store de módulo).
+ * Quando o usuário entra, recarrega a coleção do novo user; quando sai,
+ * limpa o mapa e o summary.
+ *
+ * Ações otimistas (`add`, `remove`, `setQuantity`, `toggle`) atualizam o
+ * store e revalidam com o service. Quando chamadas sem user (visitante),
+ * disparam `onRequireSession` (injetado pelo Provider) em vez de sair
+ * em silêncio — pede o login modal e continua a ação pendente depois.
  */
 type CollectionState = {
   /** Mapa `carId → quantity` (0 quando não está na coleção). */
   items: Record<string, number>;
+  /** Mapa `carId → Car` resolvido a partir do `getCollection`. Usado pela
+   *  tela Coleção (e outros) para renderizar cards sem `getCollection`
+   *  próprio. */
+  carsById: Record<string, Car>;
   /** Total de unidades e modelos para o badge e o resumo. */
   summary: CollectionSummary;
   /** Versão do store (incrementa a cada mutação), para forçar re-render. */
@@ -46,13 +55,26 @@ type CollectionActions = {
   refresh: () => Promise<void>;
 };
 
+type CollectionContextValue = CollectionState &
+  CollectionActions & {
+    /** Pede login modal ao consumidor quando uma ação exigir sessão. */
+    onRequireSession?: () => void;
+  };
+
 const emptySummary: CollectionSummary = { totalItems: 0, totalModels: 0, duplicates: 0 };
 
-const CollectionContext = createContext<(CollectionState & CollectionActions) | null>(null);
+const CollectionContext = createContext<CollectionContextValue | null>(null);
 
-export function CollectionProvider({ children }: { children: ReactNode }) {
+export type CollectionProviderProps = {
+  children: ReactNode;
+  /** Callback para abrir o login modal quando uma ação precisar de sessão. */
+  onRequireSession?: () => void;
+};
+
+export function CollectionProvider({ children, onRequireSession }: CollectionProviderProps) {
   const { user } = useCurrentUser();
   const [items, setItems] = useState<Record<string, number>>({});
+  const [carsById, setCarsById] = useState<Record<string, Car>>({});
   const [summary, setSummary] = useState<CollectionSummary>(emptySummary);
   const [version, setVersion] = useState(0);
   const [loaded, setLoaded] = useState(false);
@@ -68,6 +90,7 @@ export function CollectionProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(async () => {
     if (!user) {
       setItems({});
+      setCarsById({});
       setSummary(emptySummary);
       setLoaded(true);
       return;
@@ -78,27 +101,36 @@ export function CollectionProvider({ children }: { children: ReactNode }) {
         getCollectionSummary(user.id),
       ]);
       const map: Record<string, number> = {};
-      list.forEach((it) => {
+      const cars: Record<string, Car> = {};
+      list.forEach((it: CollectionItemWithCar) => {
         map[it.carId] = it.quantity;
+        cars[it.carId] = it.car;
       });
       setItems(map);
+      setCarsById(cars);
       setSummary(sum);
       setLoaded(true);
     } catch {
+      // Mantém o estado anterior e marca como carregado para a UI não
+      // travar; Toast é responsabilidade de quem chamou.
       setLoaded(true);
     }
   }, [user]);
 
+  // Reage ao user: entra → carrega a coleção; sai → limpa.
   useEffect(() => {
+    setLoaded(false);
     void refresh();
-  }, [refresh]);
+  }, [refresh, user?.id]);
 
   const toggle = useCallback(
     async (carId: string) => {
-      if (!user) return;
+      if (!user) {
+        onRequireSession?.();
+        return;
+      }
       const previous = items[carId] ?? 0;
       const next = previous > 0 ? 0 : 1;
-      // Otimista
       setItems((cur) => {
         const updated = { ...cur };
         if (next === 0) delete updated[carId];
@@ -114,7 +146,6 @@ export function CollectionProvider({ children }: { children: ReactNode }) {
           await addToCollection(user.id, carId);
         }
       } catch {
-        // rollback
         setItems((cur) => {
           const updated = { ...cur };
           if (previous === 0) delete updated[carId];
@@ -126,14 +157,16 @@ export function CollectionProvider({ children }: { children: ReactNode }) {
         throw new Error("collection_toggle_failed");
       }
     },
-    [user, items, recomputeSummary]
+    [user, items, recomputeSummary, onRequireSession]
   );
 
   const setQuantityAction = useCallback(
     async (carId: string, quantity: number) => {
-      if (!user) return;
+      if (!user) {
+        onRequireSession?.();
+        return;
+      }
       const previous = items[carId] ?? 0;
-      // Otimista
       setItems((cur) => {
         const updated = { ...cur };
         if (quantity <= 0) delete updated[carId];
@@ -145,7 +178,6 @@ export function CollectionProvider({ children }: { children: ReactNode }) {
       try {
         await setCollectionQuantity(user.id, carId, quantity);
       } catch {
-        // rollback
         setItems((cur) => {
           const updated = { ...cur };
           if (previous <= 0) delete updated[carId];
@@ -157,14 +189,16 @@ export function CollectionProvider({ children }: { children: ReactNode }) {
         throw new Error("collection_set_failed");
       }
     },
-    [user, items, recomputeSummary]
+    [user, items, recomputeSummary, onRequireSession]
   );
 
   const removeAction = useCallback(
     async (carId: string) => {
-      if (!user) return;
+      if (!user) {
+        onRequireSession?.();
+        return;
+      }
       const previous = items[carId] ?? 0;
-      // Otimista
       setItems((cur) => {
         const updated = { ...cur };
         delete updated[carId];
@@ -185,12 +219,13 @@ export function CollectionProvider({ children }: { children: ReactNode }) {
         throw new Error("collection_remove_failed");
       }
     },
-    [user, items, recomputeSummary]
+    [user, items, recomputeSummary, onRequireSession]
   );
 
-  const value = useMemo(
+  const value = useMemo<CollectionContextValue>(
     () => ({
       items,
+      carsById,
       summary,
       version,
       loaded,
@@ -198,8 +233,20 @@ export function CollectionProvider({ children }: { children: ReactNode }) {
       setQuantity: setQuantityAction,
       remove: removeAction,
       refresh,
+      onRequireSession,
     }),
-    [items, summary, version, loaded, toggle, setQuantityAction, removeAction, refresh]
+    [
+      items,
+      carsById,
+      summary,
+      version,
+      loaded,
+      toggle,
+      setQuantityAction,
+      removeAction,
+      refresh,
+      onRequireSession,
+    ]
   );
 
   return <CollectionContext.Provider value={value}>{children}</CollectionContext.Provider>;
@@ -225,8 +272,6 @@ export function useCollectionCount(): number {
  */
 export function useCollectionQuantity(carId: string): number {
   const { items, version } = useCollectionStore();
-  // `version` força re-render quando o mapa muda (mesmo que o valor
-  // individual de carId não tenha mudado).
   void version;
   return items[carId] ?? 0;
 }

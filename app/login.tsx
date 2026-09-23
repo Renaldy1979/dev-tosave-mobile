@@ -146,7 +146,9 @@ export default function Login() {
         const existing = await getCollectionQuantity(result.user.id, params.carId);
         if (existing === 0) {
           await addToCollection(result.user.id, params.carId);
-          // Sincroniza o store compartilhado da coleção.
+          // O store compartilhado já recarrega automaticamente quando
+          // o user muda (via useEffect), mas garantimos consistência
+          // imediata para a próxima tela.
           await collectionStore.refresh();
           show({ type: "success", message: "Adicionada à sua coleção." });
         }

@@ -1,10 +1,10 @@
 import "./global.css";
 
-import { useEffect } from "react";
+import { useCallback, useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
-import { Stack } from "expo-router";
+import { Stack, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import {
   useFonts,
@@ -44,6 +44,23 @@ export default function RootLayout() {
     if (fontsLoaded) SplashScreen.hideAsync().catch(() => undefined);
   }, [fontsLoaded]);
 
+  // O `CollectionProvider` precisa abrir o modal de login quando o
+  // usuário tenta favoritar sem sessão. Como ele está num nível acima
+  // do Stack (e portanto acima do router no nível de hooks), envolvemos
+  // num componente interno que recebe o `useRouter`.
+  const router = useRouter();
+  const requireSession = useCallback(
+    (intent?: { carId?: string }) => {
+      router.push({
+        pathname: "/login",
+        params: intent?.carId
+          ? { intent: "add", carId: intent.carId }
+          : undefined,
+      });
+    },
+    [router]
+  );
+
   if (!fontsLoaded) return null;
 
   return (
@@ -52,7 +69,9 @@ export default function RootLayout() {
         <ThemeProvider>
           <BottomSheetModalProvider>
             <ToastProvider>
-              <CollectionProvider>
+              <CollectionProvider
+                onRequireSession={() => requireSession()}
+              >
                 <StatusBar style="light" />
                 <Stack screenOptions={{ headerShown: false }}>
                   <Stack.Screen name="index" />
