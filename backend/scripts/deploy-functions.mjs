@@ -12,6 +12,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { InputFile } from "node-appwrite/file";
 import { functions, isNotFound, sleep } from "../lib/appwrite.mjs";
+import { CATALOG_SYNC_EVENTS } from "../lib/catalog-sync.mjs";
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const outDir = path.join(root, ".state", "deploy");
@@ -19,7 +20,6 @@ mkdirSync(outDir, { recursive: true });
 
 // node-22 habilitado no VPS em 23/09/2026 (_APP_FUNCTIONS_RUNTIMES).
 const RUNTIME = process.env.FUNCTIONS_RUNTIME ?? "node-22";
-const DB_EVENTS = (table) => ["create", "update", "delete"].map((a) => `databases.tosave.tables.${table}.rows.*.${a}`);
 
 const FUNCTIONS = [
   {
@@ -36,7 +36,7 @@ const FUNCTIONS = [
     functionId: "catalog-sync",
     name: "catalog-sync",
     execute: [],
-    events: [...DB_EVENTS("cars"), ...DB_EVENTS("series"), ...DB_EVENTS("brands")],
+    events: CATALOG_SYNC_EVENTS,
     schedule: "0 4 * * *",
     timeout: 300,
     logging: true,

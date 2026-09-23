@@ -19,6 +19,7 @@ import pg from "pg";
 import { Query } from "node-appwrite";
 import { tablesDB, functions, DATABASE_ID, sleep } from "../lib/appwrite.mjs";
 import { translateColor } from "../lib/colors.mjs";
+import { pauseCatalogSync } from "../lib/catalog-sync.mjs";
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const stateDir = path.join(root, ".state");
@@ -58,13 +59,13 @@ await pgClient.connect();
 const sql = async (text, params) => (await pgClient.query(text, params)).rows;
 
 export const brandSlug = (name) =>
-  name.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
 export const searchText = (...parts) =>
-  parts.filter(Boolean).join(" ").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+  parts.filter(Boolean).join(" ").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
 
 /** Remove espaços invisíveis (U+200B etc.) que vieram colados em vários campos. */
-const clean = (v) => (v ?? "").replace(/[​-‍⁠﻿]/g, "").trim();
+const clean = (v) => (v ?? "").replace(/[\u200B-\u200D\u2060\uFEFF]/g, "").trim();
 
 const iso = (d) => (d ? new Date(d).toISOString() : null);
 
@@ -81,17 +82,6 @@ async function upsertBatch(tableId, rows) {
   }
 }
 
-/** Liga/desliga a Function catalog-sync (evita milhares de eventos na carga). */
-async function setCatalogSync(enabled) {
-  if (dryRun) return;
-  const f = await functions.get({ functionId: "catalog-sync" });
-  await functions.update({
-    functionId: f.$id, name: f.name, runtime: f.runtime, execute: f.execute, events: f.events,
-    schedule: f.schedule, timeout: f.timeout, enabled, logging: f.logging, entrypoint: f.entrypoint,
-    commands: f.commands, scopes: f.scopes,
-  });
-  console.log(`  catalog-sync ${enabled ? "religada" : "desligada durante a carga"}`);
-}
 
 // ---------- fases ----------
 
@@ -281,18 +271,18 @@ try {
   for (const phase of phases) {
     const loads = ["brands", "series", "cars"].includes(phase);
     if (loads && !syncDisabled) {
-      await setCatalogSync(false);
+      await pauseCatalogSync(true);
       syncDisabled = true;
     }
     // A recontagem roda na própria catalog-sync: precisa estar ligada.
     if (!loads && syncDisabled) {
-      await setCatalogSync(true);
+      await pauseCatalogSync(false);
       syncDisabled = false;
     }
     console.log(`\n# ${phase}`);
     await RUNNERS[phase]();
   }
 } finally {
-  if (syncDisabled) await setCatalogSync(true);
+  if (syncDisabled) await pauseCatalogSync(false);
   await pgClient.end();
 }

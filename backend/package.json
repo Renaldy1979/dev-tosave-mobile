@@ -15,7 +15,8 @@
     "deploy-functions": "node --env-file=.env.local scripts/deploy-functions.mjs",
     "migrate": "node --env-file=.env.local scripts/migrate.mjs",
     "validate": "node --env-file=.env.local scripts/validate.mjs",
-    "import-user": "node --env-file=.env.local scripts/import-user.mjs"
+    "import-user": "node --env-file=.env.local scripts/import-user.mjs",
+    "upload-images": "node --env-file=.env.local scripts/upload-images.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1138.0",
