@@ -1,4 +1,4 @@
-# ToSave Mobile — Design (fase 1)
+# ToSave Mobile — Design (fases 1 e 2)
 
 Specs de design do **app do colecionador** (Expo + expo-router + NativeWind). Fonte de requisitos: `docs/ESPECIFICACAO-MOBILE.md`.
 
@@ -7,12 +7,15 @@ Specs de design do **app do colecionador** (Expo + expo-router + NativeWind). Fo
 | `design-system-mobile.md` | Tokens (`tailwind.config.js` do NativeWind), temas light/dark, tipografia, densidade, toque de 44 pt, safe area, elevação nativa, motion, estados globais |
 | `componentes.md` | Catálogo de componentes com props, anatomia, estados e acessibilidade |
 | `telas/01-onboarding-splash.md` | Splash e onboarding |
-| `telas/02-login.md` | Login simulado, em modal, pedido só ao adicionar à coleção e ao abrir Coleção ou Perfil |
+| `telas/02-login.md` | **Fase 2:** Login como tela de entrada (app travado sem sessão), link "Criar conta"; proposta de "Esqueci minha senha" |
 | `telas/03-home.md` | Home: séries em destaque, busca rápida, grid |
 | `telas/04-busca-filtros.md` | Busca e filtros (ano, série, marca, atributos) |
 | `telas/05-car-detalhe.md` | Detalhe premium do carro |
 | `telas/06-colecao.md` | Coleção do usuário, quantidade, repetidos |
 | `telas/07-perfil.md` | Perfil do colecionador |
+| `telas/08-cadastro.md` | **Fase 2:** Cadastro pelo app (nome, e-mail, senha), erros oficiais do Appwrite |
+
+> **Fase 2: app travado por login.** O mapa e as regras abaixo já descrevem a fase 2. Na fase 1 o app era navegável sem conta e o login era um modal pedido sob demanda; esse modelo está substituído.
 
 Referência visual herdada (não editar, é do portal web pausado): `docs/referencia-web/`.
 
@@ -22,47 +25,60 @@ Referência visual herdada (não editar, é do portal web pausado): `docs/refere
 app/
 ├─ _layout.tsx            Root: fontes, SplashScreen, SafeAreaProvider, GestureHandlerRootView,
 │                         ThemeProvider, BottomSheetModalProvider, ToastProvider, SessionProvider, <Stack>
-├─ index.tsx              Boot/splash animado → decide a rota inicial (replace)
-├─ onboarding.tsx         3 slides; só na primeira abertura
-├─ login.tsx              Login simulado, apresentado como MODAL (params next / intent=add&carId)
-├─ (tabs)/
-│  ├─ _layout.tsx         <Tabs> com TabBar custom (ink); intercepta Coleção e Perfil sem sessão
-│  ├─ index.tsx           Home            → "/"                    público
-│  ├─ busca.tsx           Busca e filtros → "/busca?q=&year=&serie=&brand=&attr=&focus=1"   público
-│  ├─ colecao.tsx         Coleção         → "/colecao?q=&dup=1"    exige sessão
-│  └─ perfil.tsx          Perfil          → "/perfil"              exige sessão (tab "Entrar" sem sessão)
+├─ index.tsx              Boot/splash animado → decide a rota inicial (replace) conforme sessão e onboarding
+├─ onboarding.tsx         3 slides; só na primeira abertura                                  público
+├─ login.tsx              Login, tela de entrada (stack normal, sem modal) → "/login?email=&reason=expired"   público
+├─ cadastro.tsx           Cadastro (nome, e-mail, senha) → "/cadastro"                        público
+├─ (tabs)/                ── tudo daqui para baixo exige sessão ──
+│  ├─ _layout.tsx         <Tabs> com TabBar (ink); guarda de sessão: sem sessão → replace("/login")
+│  ├─ index.tsx           Home            → "/(tabs)"
+│  ├─ busca.tsx           Busca e filtros → "/busca?q=&year=&serie=&brand=&attr=&focus=1&open="
+│  ├─ colecao.tsx         Coleção         → "/colecao?q=&dup=1"
+│  └─ perfil.tsx          Perfil          → "/perfil"
 └─ car/
-   └─ [id].tsx            Detalhe do carro (Stack sobre as tabs, sem TabBar) → "/car/123"   público
+   └─ [id].tsx            Detalhe do carro (Stack sobre as tabs, sem TabBar) → "/car/123"    exige sessão
 ```
 
+Rotas públicas: `index` (splash), `onboarding`, `login` e `cadastro`. Todas as outras exigem sessão. A guarda fica num só lugar (root `_layout.tsx`, ou um grupo `(app)` com o seu `_layout`), nunca repetida por tela.
+
 ```
-            ┌──────────┐ 1ª vez  ┌────────────┐
-  abrir ──▶ │  index   │───────▶ │ onboarding │───┐
-            │ (splash) │         └────────────┘   │ Começar / Pular (replace)
-            └────┬─────┘                          │
-                 │ demais aberturas (com ou sem sessão)
-                 ▼                                ▼
+            ┌──────────┐  1ª vez   ┌────────────┐
+  abrir ──▶ │  index   │─────────▶ │ onboarding │── Começar / Pular (replace) ──┐
+            │ (splash) │           └────────────┘                               │
+            └──┬────┬──┘                                                        │
+    com sessão │    │ sem sessão                                                │ sem sessão
+               │    ▼                                                           ▼
+               │  ┌─────────┐  "Criar conta" (push)   ┌──────────┐
+               │  │  login  │ ──────────────────────▶ │ cadastro │
+               │  │ (raiz)  │ ◀────────────────────── │          │
+               │  └────┬────┘  "Entrar" / voltar       └────┬─────┘
+               │       │ entrar (replace)                   │ conta criada + sessão (replace)
+               ▼       ▼                                    ▼
      ┌─────────────────────────── (tabs) ───────────────────────────┐
-     │  Início ◀──▶ Buscar ◀──▶ Coleção 🔒 ◀──▶ Perfil 🔒 / Entrar    │
+     │     Início ◀──▶ Buscar ◀──▶ Coleção ◀──▶ Perfil                │
      └──────┬───────────┬────────────┬──────────────────────┬───────┘
-            │ card      │ card       │ card                 │ sair → volta ao Início (anônimo)
+            │ card      │ card       │ card                 │ Sair (Dialog) ──replace──▶ login
             ▼           ▼            ▼
                     car/[id]  (push; "Mais da série" faz push de outro car/[id])
 
-  🔒 / coração sem sessão ──push──▶ login (modal) ──sucesso──▶ fecha e conclui a ação
-                                                  └─fechar──▶ volta sem mudanças
+  qualquer tela protegida + 401 (sessão expirada/revogada) ──replace──▶ login?reason=expired
+  e-mail já cadastrado no Cadastro ──"Entrar com este e-mail" (replace)──▶ login?email=…
+  conta criada, sessão falhou ──replace──▶ login?email=… (aviso "Conta criada. Entre para continuar.")
 ```
 
 **Regras**
-- **Acesso anônimo:** Home, Busca e detalhe do carro são públicos (como a home pública do portal web). Login é exigido apenas para: adicionar à coleção (coração / "Adicionar à coleção"), abrir a tab Coleção e abrir a tab Perfil.
-- Pedir login = `useRequireSession()` (ver `telas/02-login.md` §1): abre `/login` como modal com o contexto (`next` ou `intent=add&carId`) e conclui a ação após entrar.
-- Tabs protegidas: em `(tabs)/_layout.tsx`, `listeners.tabPress` de `colecao` e `perfil` faz `preventDefault()` + `requireSession({ next })` quando não há sessão.
-- Fallback de deep link (`tosave://colecao` sem sessão): a própria tela renderiza o `LoginGate` (componentes §C.16) em vez de redirecionar. Evita loop de redirect ao fechar o modal.
-- Splash e onboarding usam `router.replace` (o voltar nunca retorna a eles). Sair (Perfil) faz `router.replace("/")`.
+- **App travado:** sem sessão só existem splash, onboarding, login e cadastro. Todas as outras rotas exigem sessão.
+- **Guarda de sessão:** num único ponto. Sem sessão, qualquer rota protegida faz `router.replace("/login")`; com sessão, `login` e `cadastro` fazem `router.replace("/(tabs)")`. Nada de guarda por tela nem de `LoginGate`.
+- **Login é raiz:** entra sempre por `replace`, nunca por `push`. O back do Android no Login sai do app. O Cadastro é o único `push` a partir do Login, e seu voltar retorna ao Login.
+- **Entrar no app** (login ou cadastro com sucesso) faz `router.replace("/(tabs)")`: o voltar nunca retorna a Login ou Cadastro.
+- **Sair** (Perfil) → `account.deleteSession("current")` → limpa estado local (coleção, cache) → `router.replace("/login")`. Tema e `onboarding.seen` ficam.
+- **Sessão expirada:** `401` do Appwrite em qualquer tela protegida → limpa estado local → `router.replace("/login?reason=expired")`.
+- **Deep links** (`scheme: "tosave"`): `tosave://car/123` abre o detalhe se houver sessão. Sem sessão cai no Login; retomar o deep link depois de entrar é fase 1.5.
+- Splash e onboarding usam `router.replace` (o voltar nunca retorna a eles).
 - Estado de busca, filtros e "repetidos" vive nos **search params** (`router.setParams`), então o voltar do detalhe restaura a lista exata.
-- Deep link (`scheme: "tosave"`): `tosave://car/123` abre o detalhe direto, com ou sem sessão.
-- Headers: `headerShown: false` no Stack e nas Tabs; cada tela renderiza seu `Header` (componentes §7).
-- Detalhe: `animation: "slide_from_right"`, `gestureEnabled: true`, `fullScreenGestureEnabled: true` (iOS). Login: `presentation: "modal"` (iOS), `animation: "slide_from_bottom"` (Android).
+- Headers: `headerShown: false` no Stack e nas Tabs; cada tela renderiza seu `Header` (componentes §7). Login e Cadastro não têm Header (Cadastro tem só o voltar glass).
+- Animações de stack: detalhe com `animation: "slide_from_right"`, `gestureEnabled: true`, `fullScreenGestureEnabled: true` (iOS). Login e Cadastro com a animação padrão do Stack (**sem** `presentation: "modal"`).
+- **Obrigatório antes de publicar nas lojas (fora da fase 2):** "Esqueci minha senha", "Excluir conta" e Termos/Privacidade (ver `ESPECIFICACAO-MOBILE.md`). Não aparecem no mapa até existirem.
 
 ## Contrato de dados das telas (`src/services/`)
 

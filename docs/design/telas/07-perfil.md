@@ -46,6 +46,8 @@ Dados do colecionador, preferências do app e saída. Sem telas administrativas 
 
 - `ScrollView` com gutter 16, seções separadas por 32 pt.
 - Avatar: iniciais do nome (até 2 letras). Não há upload de foto na fase 1.
+- **Fase futura (depois da fase 2):** foto de perfil e demais dados do colecionador serão editados aqui, no Perfil. O Cadastro (`08-cadastro.md`) pede só nome, e-mail e senha.
+- **Fase 2:** "Sair" faz `router.replace("/login")` (app travado). O `LoginGate` deixa de existir.
 
 ## 2. Hierarquia
 1. Identidade (avatar, nome, e-mail)

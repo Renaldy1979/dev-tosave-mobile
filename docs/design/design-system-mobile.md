@@ -597,7 +597,7 @@ Instalar sempre com `npx expo install` para casar as versões do SDK.
 | M3 | Hover | Não existe no app. `primary-hover` do web vira `primary-pressed`. |
 | M4 | Sombra no dark | Não usar. Elevação = superfície mais clara + borda. |
 | M5 | Coleção = favorito | O coração do CarCard e do detalhe adiciona/remove da coleção (mesmo conceito "like/favorito" do portal). Quantidade se ajusta no detalhe e na Coleção. |
-| M6 | Acesso (**aprovado pelo Orquestrador**) | Navegação anônima: Home, Busca e detalhe do carro são públicos, como a home pública do portal. O login (modal) é pedido só ao adicionar à coleção e ao abrir as tabs Coleção ou Perfil. Ver `telas/02-login.md` §1. |
+| M6 | Acesso (**aprovado pelo Orquestrador**) | Navegação anônima: Home, Busca e detalhe do carro são públicos, como a home pública do portal. O login (modal) é pedido só ao adicionar à coleção e ao abrir as tabs Coleção ou Perfil. **Substituída na fase 2:** app travado por login, Login como tela de entrada e Cadastro pelo app (`telas/02-login.md`, `telas/08-cadastro.md`). |
 | M7 | Grid | 2 colunas em celular, 1 com fonte muito grande, 3–4 em tablet. |
 
 **Pendências para o Orquestrador:**

@@ -1,4 +1,4 @@
-# ToSave Mobile — Especificação (Fase 1)
+# ToSave Mobile — Especificação
 
 Fonte única de verdade do **Projeto 01: app mobile**.
 Em caso de dúvida, pergunte ao Orquestrador: `maestri ask "Claude Code" "..."`. Não invente requisito fora deste documento.
@@ -8,18 +8,43 @@ Em caso de dúvida, pergunte ao Orquestrador: `maestri ask "Claude Code" "..."`.
 | Projeto | Pasta | O que é | Situação |
 |---|---|---|---|
 | **01 — App mobile** | `C:\Dev\tosave-mobile` | App do **colecionador**, em Expo | **Fase atual** |
-| **02 — Portal web ADM** | `...\OneDrive\Documents\Projetos\colecao-miniaturas-web` | Painel administrativo + API que servirá o app | **Pausado**, começa na fase 2 |
+| **02 — Portal web ADM** | `...\OneDrive\Documents\Projetos\colecao-miniaturas-web` | Painel administrativo (gestor amigável da base Appwrite) | **Pausado**, começa na fase 3 |
 
-> O app mobile foi movido do OneDrive para `C:\Dev\tosave-mobile` em 22/09/2026: a sincronização do OneDrive corrompeu pacotes dentro de `node_modules` durante o install. O portal web ainda está no OneDrive e deve ser movido quando a fase 2 começar.
+> O app mobile foi movido do OneDrive para `C:\Dev\tosave-mobile` em 22/09/2026: a sincronização do OneDrive corrompeu pacotes dentro de `node_modules` durante o install. O portal web ainda está no OneDrive e deve ser movido quando a fase 3 começar.
 
 O portal web já tem um esqueleto Next.js com schema do banco e o design system completo. **Ninguém mexe nele nesta fase.**
 Administração (CRUD de carros, séries, marcas, atributos, usuários, settings) é assunto do portal, **nunca do app**.
+
+## Fase 2 — Backend Appwrite + app ligado (decisões do usuário, 23/09/2026)
+
+A fase 1 está entregue (tag `v0.1.0-fase1`). A fase 2 vem **antes** do portal web: primeiro o app e a base conversando sem problemas, depois o painel web, que será só um gestor amigável da mesma base.
+
+- **Backend único: Appwrite 1.8.1** self-hosted no VPS do usuário. Usamos tudo o que ele oferece: Auth, banco (TablesDB), Storage (imagens dos carros) e Functions. A URL e o ProjectId estão na nota "Appwrite Credentials".
+  - A **API key nunca** vai para o git nem para o app.
+  - O app usa só o SDK client (`react-native-appwrite`), com permissões.
+- **Volume:** ~10.000 carros, mais de 20.000 imagens, coleções de ~400 a mais de 1.000 itens por usuário. Nenhuma tela pode carregar a coleção inteira: tudo é paginado e contado no servidor.
+- **Migração:** os carros vêm do Postgres do VPS e as imagens do RustFS do VPS, ambos **somente leitura**. Usuários e coleções atuais são de teste e **não migram**.
+- **App travado:** sem login não se navega. Fluxo:
+  1. splash;
+  2. sem sessão, vai para Login, que oferece **Cadastro**;
+  3. com sessão, entra nas tabs.
+
+  O colecionador cria a conta **pelo app**, num cadastro simples: nome, e-mail e senha. Foto e demais dados ficam para depois, na tela de Perfil. Como o catálogo é todo autenticado, as permissões ficam mais simples.
+- **O contador da aba Coleção sai.** O resumo dentro da tela Coleção continua, lido de estatísticas mantidas no servidor.
+- O login simulado e os dados de `src/mocks/` são substituídos pelo Appwrite. Os mocks podem continuar existindo para desenvolvimento, mas nenhuma tela os usa.
+- Backend: código em `backend/` e especificação em `docs/ESPECIFICACAO-BACKEND.md`. É responsabilidade do agente **Alicerce**.
+
+### Obrigatório antes de publicar nas lojas (fora do escopo da fase 2, não pode ser esquecido)
+
+- **Excluir conta pelo app**, no Perfil. A App Store exige isso de apps que permitem criar conta. No Appwrite, a exclusão precisa de uma Function no servidor, porque o SDK client não apaga o próprio usuário.
+- **Esqueci minha senha:** precisa de SMTP configurado no Appwrite e de uma URL de retorno (deep link). O desenho mínimo está em `docs/design/telas/02-login.md` §7. O link não aparece no app até o fluxo existir.
+- **URLs de Termos de Uso e Política de Privacidade**, que as lojas exigem. O conteúdo é definido pelo usuário.
 
 ## Stack do app
 
 - **Expo** (SDK atual) + **expo-router** + TypeScript
 - **NativeWind** para estilos (Tailwind no React Native)
-- Sem backend nesta fase
+- Fase 1 sem backend; na fase 2, Appwrite (ver a seção acima)
 
 ## Escopo da fase 1 — decisão do usuário
 

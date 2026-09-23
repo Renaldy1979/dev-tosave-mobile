@@ -221,6 +221,7 @@ Custom `tabBar` do `<Tabs>` do expo-router (`app/(tabs)/_layout.tsx`). **Sempre 
 - Ativo: ícone e label `primary` (`#FD8401`); indicador de 16×2 pt com gradiente flame acima do ícone. Inativo: `fg-subtle` (neutral-400).
 - Coleção mostra um contador `Badge count` com o total de itens (soma de quantity), máximo "99+". Some quando zero e sem sessão.
 - **Sem sessão:** tocar em Coleção ou em Entrar não troca de tab; abre o login em modal (`useRequireSession({ next })`, ver `telas/02-login.md` §1). A tab ativa continua a mesma.
+- **Fase 2 (app travado):** as tabs só existem com sessão. Saem a label "Entrar"/`LogIn`, a interceptação de `tabPress` e o contador da tab Coleção (decisão do usuário). O mesmo vale para o "Entrar" do HomeHeader (§7), o estado "Sem sessão" do FavoriteButton (§13) e o `LoginGate` (§C.16), que deixam de ser usados.
 - Toque: `selectionAsync` **não** (tab não tem haptic). Tocar na tab ativa rola a lista ao topo (`useScrollToTop`); tocar de novo na Busca foca o campo.
 - A11y: `accessibilityRole="tab"`, `accessibilityState.selected`, label "Coleção, 12 itens".
 - Esconde com o teclado aberto no Android (`tabBarHideOnKeyboard: true`).

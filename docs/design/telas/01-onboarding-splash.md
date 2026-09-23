@@ -34,7 +34,8 @@ Configurado no `app.json` (DS §2): fundo `#0B0B0D`, `logo.png` 220 pt centraliz
 3. Ao resolver: logo escala 1 → 1.04 e faz fade out junto com a barra (250 ms), e `router.replace` para o destino.
 4. Destino:
    - `onboarding.seen` ausente → `/onboarding`
-   - nos demais casos → `/(tabs)` (Home), **com ou sem sessão**. O app é navegável sem conta; o login só é pedido ao adicionar à coleção ou abrir Coleção/Perfil.
+   - ~~nos demais casos → `/(tabs)` (Home), com ou sem sessão~~ (fase 1).
+   - **Fase 2 (app travado):** sessão válida (`account.get()`) → `/(tabs)`; sem sessão → `/login`. "Pular" e "Começar" do onboarding passam a levar a `/login` (ou a `/(tabs)` se já houver sessão). Ver `02-login.md` §1.
 
 **Movimento reduzido:** sem escala; barra aparece cheia; fade simples de 200 ms.
 

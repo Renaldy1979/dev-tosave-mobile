@@ -2,52 +2,70 @@
 
 | | |
 |---|---|
-| Rota | `app/login.tsx`, apresentada como **modal** (`presentation: "modal"` no iOS, `animation: "slide_from_bottom"` no Android) |
-| Params | `next` (rota para ir depois de entrar, ex. `/colecao`) · `intent=add&carId=123` (ação pendente de adicionar à coleção) |
-| Acesso | público; com sessão ativa, fecha sozinho |
-| Tema | **sempre ink**, status bar `light` |
-| Dados | `auth.signIn(email, password)` — **simulado** na fase 1; `collection.add(carId)` quando há `intent=add` |
+| Rota | `app/login.tsx` → `/login`, tela de stack **normal** (não é mais modal). É a **tela de entrada** do app quando não há sessão. |
+| Params | `email` (opcional: vem preenchido, ex.: a partir do Cadastro) · `reason=expired` (opcional: sessão expirada) |
+| Acesso | público; **com sessão ativa, redireciona para `/(tabs)`** sem renderizar o formulário |
+| Tema | **sempre ink** (`ThemeScope dark`), status bar `light`, nos dois temas |
+| Dados | Appwrite Auth: `account.createEmailPasswordSession(email, password)` |
+| Fase | **2** (substitui a versão modal da fase 1) |
 
-O app é navegável sem conta: Home, Busca e detalhe do carro são públicos. O login é pedido **apenas** quando o usuário:
-1. toca no coração ou em "Adicionar à coleção" (Home, Busca, detalhe);
-2. toca na tab **Coleção**;
-3. toca na tab **Perfil** (que, sem sessão, aparece como **Entrar**).
+## O que mudou em relação à fase 1
 
-Login simulado: o service valida só o formato e compara com o usuário de exemplo dos mocks; não há senha verificada em servidor. Não existe cadastro nesta fase, portanto **não há link "Criar conta"** nem "Esqueci a senha".
+A partir da fase 2 o app é **travado por login** (`ESPECIFICACAO-MOBILE.md`, seção "Fase 2"). Sem sessão não se navega.
 
-## 1. Como o login é pedido
+| Fase 1 (sai) | Fase 2 (entra) |
+|---|---|
+| Modal aberto por gatilhos (coração, tabs Coleção/Perfil) | Tela de entrada do app; nunca é modal |
+| Botão X "Fechar" | **Não existe.** Sem sessão não há para onde voltar; o back do Android fecha o app |
+| Params `next` e `intent=add&carId` + `useRequireSession()` | Removidos. Todas as telas exigem sessão, então não há ação pendente |
+| Título contextual por gatilho | Título único (§3) |
+| "Preencher dados de exemplo" e nota de demonstração | **Removidos** |
+| Sem cadastro | Link **"Criar conta"** → `08-cadastro.md` |
+| Login simulado (`src/mocks/`) | Appwrite Auth |
 
-Hook único `useRequireSession()` (em `src/hooks/`), usado por todos os gatilhos:
+Consequências nas outras telas:
+- a tab Perfil volta a ser sempre "Perfil";
+- o `LoginGate` (componentes §C.16) e o botão "Entrar" do header da Home deixam de existir;
+- o coração adiciona direto, já que há sessão.
 
-```ts
-const requireSession = useRequireSession();
-// retorna true se já há sessão; senão abre o login com o contexto e retorna false
-if (!requireSession({ intent: "add", carId })) return;
-if (!requireSession({ next: "/colecao" })) return;
+Critério de pronto (enxuto):
+- funciona sem crash nem fluxo sem saída;
+- está certo nos temas light e dark;
+- respeita a safe area;
+- usa os textos oficiais;
+- tem toque de 44 pt e a11y.
+
+Sem animações extras: o encolhimento animado do topo com teclado vai para a fase 1.5.
+
+## 1. Fluxo de entrada do app
+
+```
+splash ──► onboarding.seen ausente? ──► Onboarding ──► Login
+   │                                                    ▲
+   ├── sem sessão ──────────────────────────────────────┘
+   └── com sessão válida ──► /(tabs) (Home)
 ```
 
-| Gatilho | Sem sessão | Depois de entrar |
-|---|---|---|
-| Coração / "Adicionar à coleção" | abre `/login?intent=add&carId=123`; o coração **não** muda antes do login | executa `collection.add(carId)`, fecha o modal, o usuário continua na mesma tela com o coração ativo + Toast "Adicionada à sua coleção." |
-| Tab Coleção | `tabPress` com `preventDefault()` e abre `/login?next=/colecao` | fecha o modal e navega para `/colecao` |
-| Tab Perfil ("Entrar") | idem, com `next=/perfil` | fecha o modal e navega para `/perfil` |
-| Fechar sem entrar (X, arrastar para baixo, back do Android) | — | volta à tela de origem sem nenhuma mudança; a ação pendente é descartada |
-
-Se o carro da ação pendente já estiver na coleção do usuário que entrou, não soma unidade: só fecha e mostra o coração ativo.
+- O splash (`01-onboarding-splash.md`) consulta `account.get()`:
+  - sessão válida → `router.replace("/(tabs)")`;
+  - sem sessão → `router.replace("/login")` (ou Onboarding na primeira abertura, que no fim leva ao Login).
+- **Sessão expirada ou revogada** durante o uso (resposta `401` do Appwrite em qualquer tela) → limpa o estado local e faz `router.replace({ pathname: "/login", params: { reason: "expired" } })`.
+- **Sair** (Perfil) → `account.deleteSession("current")` → `router.replace("/login")`. O voltar nunca reabre as tabs.
+- O Login sempre entra com `router.replace`, nunca `push`, para o voltar não levar a uma tela protegida.
 
 ## 2. Layout
 
 ```
 ┌───────────────────────────────┐
-│ (✕)                           │  IconButton glass "Fechar", insets.top + 8 (iOS modal: sem inset, tem a alça)
-│░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░│  topo (≈ 30% da altura): palco ink
+│░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░│  topo (≈ 30% da altura): palco ink, conteúdo a partir de insets.top
 │░░░      [ LOGO 180pt ]     ░░░│  logo-car.png em marca d'água atrás (opacidade 6%, 140% da largura, cortada)
-│░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░│  gradiente radial laranja sutil (primary/12) atrás da logo
+│░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░│  (sem X de fechar)
 ├───────────────────────────────┤
-│  Entre para                   │  display-lg font-display-black ink-fg
-│  salvar sua coleção           │  (título muda conforme o gatilho, ver §3)
-│  Guarde suas miniaturas e     │  body ink-fg/70
-│  controle as repetidas.       │
+│  Entre na sua conta           │  display-lg font-display-black ink-fg (header)
+│  Sua coleção de miniaturas,   │  body ink-fg/70
+│  organizada.                  │
+│                               │
+│  ⓘ Sua sessão expirou.        │  banner informativo (só com reason=expired, ou após cadastro, §5)
 │                               │
 │  E-mail                       │
 │  [✉  voce@email.com         ] │  Input (leftIcon Mail)
@@ -55,76 +73,106 @@ Se o carro da ação pendente já estiver na coleção do usuário que entrou, n
 │  Senha                        │
 │  [🔒 ••••••••            👁 ] │  Input password (leftIcon Lock)
 │                               │
-│  ⚠ E-mail ou senha incorretos.│  banner de erro (só no erro de credencial)
+│  ⚠ E-mail ou senha incorretos.│  banner de erro (§5)
 │                               │
 │  [          Entrar          ] │  Button flame lg fullWidth
 │                               │
-│  Ambiente de demonstração:    │  caption ink-fg/50 centralizado
-│  use os dados de exemplo.     │  + link "Preencher dados de exemplo" primary-text
+│  Ainda não tem conta?         │  body-sm ink-fg/70 centralizado
+│  Criar conta                  │  link primary-text font-sans-medium, min-h-11 → /cadastro
 └───────────────────────────────┘  + insets.bottom + 16
 ```
 
-- Container: `ScrollView` com `keyboardShouldPersistTaps="handled"` dentro de `KeyboardAvoidingView`. Com teclado aberto, o topo encolhe para 16% da altura (logo 120 pt, animação 200 ms), mantendo campo focado e botão visíveis.
-- Gutter 24 pt, largura máxima 440 pt centralizada (tablet).
-- No iOS o modal nativo (`pageSheet`) mostra o cartão com a tela de origem recuada atrás, reforçando que o login é um passo rápido e não uma troca de contexto.
+- Container: `ScrollView` com `keyboardShouldPersistTaps="handled"` dentro de `KeyboardAvoidingView`. O campo focado e o botão ficam sempre visíveis acima do teclado. O topo **não** anima (o encolhimento com teclado é fase 1.5); ele pode simplesmente sair de vista ao rolar.
+- Gutter de 24 pt, largura máxima de 440 pt centralizada (tablet).
+- Safe area: o topo pinta a área da status bar; o primeiro conteúdo começa em `insets.top`. A base soma `insets.bottom + 16`.
+- O gradiente radial `primary/12` atrás da logo é fase 1.5 (opcional).
 
-## 3. Título contextual
+## 3. Título
 
-| Gatilho | Título | Texto de apoio |
-|---|---|---|
-| `intent=add` | Entre para salvar sua coleção | Guarde suas miniaturas e controle as repetidas. |
-| `next=/colecao` | Entre para ver sua coleção | Suas miniaturas ficam salvas na sua conta. |
-| `next=/perfil` ou sem contexto | Bem-vindo de volta | Entre para acessar sua conta. |
+Título único, sem variação por contexto:
 
-## 4. Hierarquia
-1. Logo (identidade)
-2. Título contextual (por que estou vendo isto)
-3. Campos
-4. CTA "Entrar"
-5. Nota de demonstração
+| Título | Texto de apoio |
+|---|---|
+| Entre na sua conta | Sua coleção de miniaturas, organizada. |
 
-## 5. Campos e validação
+## 4. Campos e validação
 
 | Campo | Config | Validação (ao sair do campo e ao enviar) | Mensagem |
 |---|---|---|---|
-| E-mail | `keyboardType="email-address"`, `autoCapitalize="none"`, `autoComplete="email"`, `textContentType="username"`, `returnKeyType="next"` | obrigatório; formato de e-mail | "Informe seu e-mail." / "E-mail inválido." |
-| Senha | `variant="password"`, `returnKeyType="go"` (envia) | obrigatório | "Informe sua senha." |
+| E-mail | `keyboardType="email-address"`, `autoCapitalize="none"`, `autoComplete="email"`, `textContentType="username"`, `returnKeyType="next"` | obrigatório; formato de e-mail; enviado em minúsculas e sem espaços | "Informe seu e-mail." / "E-mail inválido." |
+| Senha | `variant="password"`, `autoComplete="password"`, `textContentType="password"`, `returnKeyType="go"` (envia) | obrigatório | "Informe sua senha." |
 
-- Erro de campo só aparece depois do primeiro blur ou da primeira tentativa de envio. Depois disso, revalida ao digitar.
-- "Entrar" fica **habilitado** sempre; ao tocar com erro, foca o primeiro campo inválido e dispara haptic Error.
-- Campo de e-mail recebe foco automático ao abrir (o usuário chegou com intenção de entrar).
-- "Preencher dados de exemplo" preenche e-mail e senha do usuário de exemplo via `auth.getDemoCredentials()` (nunca importando o mock na tela). Existe porque o login é simulado; sai na fase 2.
+- O erro de campo só aparece depois do primeiro blur ou da primeira tentativa de envio. Depois disso, o campo revalida ao digitar.
+- "Entrar" fica **sempre habilitado**. Ao tocar com erro, o foco vai para o primeiro campo inválido.
+- Foco inicial: no e-mail; se ele vier preenchido por param, na senha.
+- O Login não valida o tamanho mínimo da senha. Quem define se a senha está certa é o servidor.
 
-## 6. Estados
+## 5. Estados e erros (Appwrite → texto oficial)
 
-| Estado | Visual / comportamento |
+| Estado / situação | Visual / comportamento |
 |---|---|
-| Inicial | Campos vazios, e-mail focado. |
-| Enviando | Botão `loading` ("Entrar" + spinner), campos `editable={false}`, fechar desabilitado (X, gesto e back ignorados). |
-| Sucesso | Haptic Light; executa a ação pendente (§1) e fecha com `router.back()`; com `next`, navega em seguida (`router.navigate(next)`). |
-| Ação pendente falhou (add) | Sessão fica ativa, modal fecha, Toast danger "Não foi possível atualizar sua coleção." e o coração permanece inativo. |
-| Credencial inválida | Banner acima do botão: `rounded-md bg-flame-soft border border-flame/40 px-3 py-2.5`, ícone `AlertCircle` flame + "E-mail ou senha incorretos." `body-sm`. Senha limpa e focada. Haptic Error. Anúncio para leitor de tela. |
-| Erro inesperado | Mesmo banner com "Não foi possível entrar agora. Tente novamente." |
-| Aberto já com sessão (deep link) | Fecha antes de renderizar o formulário. |
+| **Inicial** | Campos vazios (ou e-mail preenchido via param), foco conforme §4. |
+| **Enviando** | Botão em `loading` ("Entrar" + spinner). Campos com `editable={false}`. O link "Criar conta" fica desativado até a resposta. |
+| **Sucesso** | `router.replace("/(tabs)")`. |
+| **Credencial inválida** (`401 user_invalid_credentials`) | Banner de erro: "E-mail ou senha incorretos." A senha é limpa e recebe o foco. |
+| **Conta bloqueada** (`401 user_blocked`) | Banner de erro: "Esta conta está desativada." |
+| **Muitas tentativas** (`429`) | Banner de erro: "Muitas tentativas. Aguarde alguns minutos e tente de novo." |
+| **Sem rede / timeout** | Banner de erro: "Sem conexão. Verifique sua internet e tente novamente." |
+| **Erro inesperado** | Banner de erro: "Não foi possível entrar agora. Tente novamente." |
+| **Sessão já existe** (`401 user_session_already_exists`) | Tratado como sucesso: `router.replace("/(tabs)")`. |
+| **Sessão expirada** (`reason=expired`) | Banner **informativo**: "Sua sessão expirou. Entre novamente." Some ao enviar. |
+| **Vindo do Cadastro com a sessão falhando** | Banner informativo "Conta criada. Entre para continuar." e e-mail preenchido (ver `08-cadastro.md` §5). |
+| **Aberto já com sessão** | Redireciona para `/(tabs)` antes de renderizar. |
 
-Sem empty state (tela sem lista).
+- **Banner de erro:** `rounded-md bg-flame-soft border border-flame/40 px-3 py-2.5`, ícone `AlertCircle` flame + texto `body-sm`, acima do botão.
+- **Banner informativo:** `rounded-md bg-surface-2 border border-info/40`, ícone `Info` na cor `info`, abaixo do texto de apoio.
+- Todo banner é anunciado ao leitor de tela.
+- Nunca mostrar a mensagem técnica do servidor. Sem ponto de exclamação.
 
-## 7. Navegação
-- Sempre aberta por `router.push("/login?…")` a partir de um gatilho do §1 (ou de "Entrar" no header da Home). Nunca é rota inicial.
-- Fechar = `router.back()`.
-- `next` só aceita caminhos internos que começam com `/` (evita redirecionamento arbitrário por deep link).
+Sem empty state (a tela não tem lista).
+
+## 6. Navegação
+
+| Ação | Destino |
+|---|---|
+| "Criar conta" | `router.push("/cadastro")` (o voltar do Cadastro retorna ao Login) |
+| Sucesso | `router.replace("/(tabs)")` |
+| Back do Android | comportamento padrão: sai do app (o Login é a raiz quando não há sessão) |
+
+## 7. "Esqueci minha senha": proposta
+
+**Proposta: fica para depois da fase 2** (fase 2.x). O link **não aparece** no Login até o fluxo existir, para não ter botão morto.
+
+Por que não entra agora:
+- O Appwrite só faz recuperação por e-mail: `account.createRecovery(email, url)` envia um link, e `account.updateRecovery(userId, secret, password)` conclui.
+- Isso depende de **SMTP configurado** no Appwrite do VPS e de uma **URL de retorno** registrada como plataforma. Essa URL pode ser uma página web (o portal, que está pausado) ou um deep link `tosave://recuperar-senha`.
+- É infraestrutura do Alicerce, não só de tela.
+
+Quando entrar, o desenho mínimo é:
+1. Link "Esqueci minha senha" (`body-sm primary-text`, `min-h-11`) abaixo do campo Senha, alinhado à direita.
+2. Tela `/recuperar-senha`, ink:
+   - campo E-mail + botão "Enviar link";
+   - a resposta é **sempre a mesma**, exista ou não a conta: "Se houver uma conta com esse e-mail, você vai receber um link para criar uma nova senha." (não revela quais e-mails estão cadastrados).
+3. Deep link `tosave://recuperar-senha?userId&secret`:
+   - tela "Nova senha" (1 campo com olho, mínimo de 8 caracteres);
+   - no sucesso, vai para o Login com o banner informativo "Senha alterada. Entre com a nova senha.";
+   - link expirado: "Este link expirou. Peça um novo.", com botão para `/recuperar-senha`.
+
+Enquanto isso, quem esquecer a senha não tem saída pelo app. Isso é aceitável só para testes internos: **antes de publicar nas lojas, este fluxo precisa existir.**
 
 ## 8. Acessibilidade
-- Título com `accessibilityRole="header"`; botão fechar com label "Fechar".
-- Labels visíveis nos campos (não só placeholder).
-- Ordem de foco: fechar → e-mail → senha → Entrar → preencher exemplo.
-- `accessibilityViewIsModal` no container.
+- O título usa `accessibilityRole="header"`.
+- Os labels dos campos são visíveis, não só placeholder.
+- Ordem de foco: e-mail → senha → mostrar senha → Entrar → Criar conta.
+- O link "Criar conta" tem `accessibilityRole="link"` e toque de 44 pt.
 
 ## 9. Critérios de aceite
-- [ ] Home, Busca e detalhe funcionam sem login.
-- [ ] Coração, tab Coleção e tab Perfil/Entrar abrem o login quando não há sessão.
-- [ ] Depois de entrar, a ação pendente acontece (carro adicionado ou tab aberta) sem o usuário repetir o toque.
-- [ ] Fechar sem entrar não altera nada.
-- [ ] Ink nos dois temas; teclado nunca cobre o campo ativo nem o botão.
-- [ ] Autofill do iOS/Android funciona.
-- [ ] Tela não importa nada de `src/mocks/`.
+- [ ] Sem sessão, o app abre no Login (depois do onboarding na primeira vez); nenhuma tela das tabs é acessível.
+- [ ] Sem X de fechar e sem "Preencher dados de exemplo".
+- [ ] "Criar conta" abre o Cadastro, e o voltar retorna ao Login.
+- [ ] Entrar leva às tabs com `replace`; o voltar não retorna ao Login.
+- [ ] Erros do Appwrite mapeados para os textos oficiais do §5.
+- [ ] Sessão expirada leva ao Login com o aviso; Sair leva ao Login.
+- [ ] Ink nos dois temas; teclado nunca cobre o campo ativo nem o botão; safe area respeitada.
+- [ ] Autofill do iOS e do Android funciona.
+- [ ] A tela não importa nada de `src/mocks/`.
