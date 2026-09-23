@@ -6,10 +6,12 @@ import {
   APPWRITE_FUNCTION_COLLECTION,
   APPWRITE_BUCKET_IMAGES,
   withServiceError,
+  isNotFound,
   Query,
 } from "./_appwrite";
 import type { Models } from "react-native-appwrite";
 import { ExecutionMethod, ImageFormat } from "react-native-appwrite";
+import { getCurrentSession } from "./_session";
 import type {
   CollectionItem,
   CollectionItemWithCar,
@@ -226,14 +228,26 @@ export async function getCollection(
   return result.items;
 }
 
-/** Resumo: `totalItems`, `totalModels`, `duplicates` (de `user_stats`). */
+/**
+ * Resumo: `totalItems`, `totalModels`, `duplicates` (de `user_stats`).
+ *
+ * O `$id` da linha é o próprio `userId` do Auth (não `"current"`). 404
+ * significa "usuário ainda não tem stats" (acontece na primeira mutação
+ * da coleção, que cria a linha sob demanda) — devolve zeros em vez de
+ * esconder a coleção. Qualquer outro erro sobe como `ServiceError` para
+ * a UI mostrar `ErrorState` em vez de um empty state falso.
+ */
 export async function getCollectionSummary(): Promise<CollectionSummary> {
+  const userId = getCurrentSession().user?.id;
+  if (!userId) {
+    return { totalItems: 0, totalModels: 0, duplicates: 0 };
+  }
   try {
     const row = await withServiceError(() =>
       tablesDb.getRow<UserStatsRow>({
         databaseId: APPWRITE_DATABASE_ID,
         tableId: TABLE.userStats,
-        rowId: "current",
+        rowId: userId,
       })
     );
     return {
@@ -241,8 +255,10 @@ export async function getCollectionSummary(): Promise<CollectionSummary> {
       totalModels: row.totalModels,
       duplicates: row.duplicates,
     };
-  } catch {
-    return { totalItems: 0, totalModels: 0, duplicates: 0 };
+  } catch (err) {
+    // Só o 404 de verdade (status 404 / `row_not_found`) vira zeros.
+    if (isNotFound(err)) return { totalItems: 0, totalModels: 0, duplicates: 0 };
+    throw err;
   }
 }
 
@@ -270,21 +286,27 @@ export async function getCollectionQuantities(
   return map;
 }
 
-/** Mantida por compat — usada em vários call sites. */
+/**
+ * Quantidade de um carro na coleção. O `$id` da linha em
+ * `collection_items` é determinístico (`ci_<hash(userId:carId)>`), mas
+ * aqui preferimos consultar por `carId` (a row security já restringe
+ * ao usuário logado). 404 → 0 (sem entrada). Outros erros sobem.
+ */
 export async function getCollectionQuantity(
   carId: string
 ): Promise<number> {
   try {
-    const row = await withServiceError(() =>
-      tablesDb.getRow<QuantityRow>({
+    const result = await withServiceError(() =>
+      tablesDb.listRows<QuantityRow>({
         databaseId: APPWRITE_DATABASE_ID,
         tableId: TABLE.collectionItems,
-        rowId: `ci_${carId}`,
+        queries: [Query.equal("carId", carId), Query.limit(1)],
       })
     );
-    return row.quantity;
-  } catch {
-    return 0;
+    return result.rows?.[0]?.quantity ?? 0;
+  } catch (err) {
+    if (isNotFound(err)) return 0;
+    throw err;
   }
 }
 

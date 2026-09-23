@@ -4,7 +4,6 @@ import {
   RefreshControl,
   View,
 } from "react-native";
-import { FlashList } from "@shopify/flash-list";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import Animated, {
   useAnimatedScrollHandler,
@@ -16,7 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/theme/ThemeProvider";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useDelayedFlag } from "@/hooks/useDelayedFlag";
-import { useGridColumns } from "@/hooks/useGridColumns";
+import { useGridLayout } from "@/hooks/useGridColumns";
 import { useCollectionStore } from "@/hooks/useCollectionStore";
 import { listBrands, listSeries, setCollectionQuantity } from "@/services";
 import type { Brand, CarListItem, Serie } from "@/types";
@@ -64,7 +63,7 @@ export default function Colecao() {
   const { user } = useCurrentUser();
   const collection = useCollectionStore();
   const { show } = useToast();
-  const columns = useGridColumns();
+  const grid = useGridLayout();
   const [refreshing, setRefreshing] = useState(false);
 
   const [term, setTerm] = useState<string>(params.q ?? "");
@@ -167,7 +166,16 @@ export default function Colecao() {
   }, [collection.items, collection.carsById, toListItem, debouncedTerm, duplicatesOnly, sort]);
 
   const summary = collection.summary;
-  const collectionIsEmpty = collection.summary.totalItems === 0;
+  // "Coleção vazia" é decidido pela lista SEM filtros: busca ou filtro
+  // sem resultado não é coleção vazia (mantém busca e filtros visíveis).
+  const ownedCount = useMemo(
+    () => Object.values(collection.items).filter((q) => q > 0).length,
+    [collection.items]
+  );
+  const hasCollection = collection.loaded && ownedCount > 0;
+  // Falha na carga sem nada em mãos → ErrorState (nunca um empty falso).
+  const loadFailed = collection.loaded && collection.error && ownedCount === 0;
+  const collectionIsEmpty = collection.loaded && !collection.error && ownedCount === 0;
   const showSkeleton = useDelayedFlag(!collection.loaded, 150);
 
   // ----- Ações -----
@@ -200,8 +208,12 @@ export default function Colecao() {
             action: {
               label: "Desfazer",
               onPress: async () => {
-                await setCollectionQuantity(carId, previous);
-                await collection.refresh();
+                try {
+                  await setCollectionQuantity(carId, previous);
+                  await collection.refresh();
+                } catch {
+                  show({ type: "danger", message: "Não foi possível atualizar sua coleção." });
+                }
               },
             },
           });
@@ -273,7 +285,7 @@ export default function Colecao() {
         }
       >
         {/* Resumo StatTiles (esconde quando vazio e enquanto carrega). */}
-        {!collectionIsEmpty && !showSkeleton ? (
+        {hasCollection && !showSkeleton ? (
           <View className="px-4 mt-3">
             <View className="rounded-lg bg-surface border border-border p-3 flex-row">
               <StatTile
@@ -297,9 +309,9 @@ export default function Colecao() {
         ) : null}
 
         {/* Busca + Filtro Todos | Repetidos + Ordenação — sempre visíveis
-            quando há itens na coleção, inclusive durante o skeleton inicial
-            e enquanto o usuário digita. */}
-        {!collectionIsEmpty && collection.loaded ? (
+            quando há itens na coleção, inclusive com busca ou filtro sem
+            resultado. */}
+        {hasCollection ? (
           <View className="px-4 mt-4 gap-3">
             <SearchBar
               value={term}
@@ -340,8 +352,16 @@ export default function Colecao() {
         {/* Conteúdo: o store já carregou → renderiza. Sem dois
             carregamentos concorrentes. */}
         {showSkeleton ? (
-          <View className="px-3 mt-4">
-            <CarGridSkeleton numColumns={columns} />
+          <View className="mt-4">
+            <CarGridSkeleton />
+          </View>
+        ) : !collection.loaded ? null : loadFailed ? (
+          <View className="px-8 pt-8 items-center">
+            <ErrorState
+              onRetry={() => {
+                collection.refresh().catch(() => undefined);
+              }}
+            />
           </View>
         ) : collectionIsEmpty ? (
           <View className="px-8 pt-8 items-center">
@@ -355,8 +375,8 @@ export default function Colecao() {
             />
           </View>
         ) : searching && visibleItems.length === 0 ? (
-          <View className="px-3 mt-4">
-            <CarGridSkeleton numColumns={columns} />
+          <View className="mt-4">
+            <CarGridSkeleton />
           </View>
         ) : visibleItems.length === 0 ? (
           // filtro "repetidos" ou busca sem itens — texto oficial da spec.
@@ -365,41 +385,38 @@ export default function Colecao() {
               kind="no-cars"
               description="Tente outro termo ou limpe os filtros."
               action={
-                duplicatesOnly
-                  ? { label: "Ver todos", onPress: () => router.setParams({ dup: undefined }) }
-                  : debouncedTerm.trim()
-                    ? { label: "Limpar busca", onPress: () => setTerm("") }
+                debouncedTerm.trim()
+                  ? { label: "Limpar busca", onPress: () => setTerm("") }
+                  : duplicatesOnly
+                    ? { label: "Ver todos", onPress: () => router.setParams({ dup: undefined }) }
                     : undefined
               }
             />
           </View>
         ) : (
-          <View className="mt-4 px-1">
-            <FlashList
-              data={visibleItems}
-              numColumns={columns}
-              keyExtractor={(item) => item.car.id}
-              contentContainerStyle={{ paddingHorizontal: 12, gap: 12 }}
-              renderItem={({ item }) => {
-                const listItem = toListItem(item.car.id);
-                if (!listItem) return null;
-                return (
-                  <View style={{ width: `${100 / columns}%` }}>
-                    <CarCard
-                      car={listItem}
-                      variant="collection"
-                      quantity={item.q}
-                      onPress={() => router.push(`/car/${item.car.id}`)}
-                      onLongPress={() => handleLongPress(item.car.id, item.q)}
-                      onChangeQuantity={(next) => handleChangeQuantity(item.car.id, item.q, next)}
-                      onRemoveRequest={() =>
-                        setConfirmRemove({ car: item.car, quantity: item.q })
-                      }
-                    />
-                  </View>
-                );
-              }}
-            />
+          // Grid dentro do ScrollView da tela: `flex-wrap` com a mesma
+          // geometria da Home/Busca (cards de largura fixa, centralizados).
+          <View
+            className="mt-4 flex-row flex-wrap"
+            style={{ paddingHorizontal: grid.side, columnGap: grid.gap, rowGap: grid.gap }}
+          >
+            {visibleItems.map((item) => {
+              const listItem = toListItem(item.car.id);
+              if (!listItem) return null;
+              return (
+                <CarCard
+                  key={item.car.id}
+                  car={listItem}
+                  variant="collection"
+                  width={grid.itemWidth}
+                  quantity={item.q}
+                  onPress={() => router.push(`/car/${item.car.id}`)}
+                  onLongPress={() => handleLongPress(item.car.id, item.q)}
+                  onChangeQuantity={(next) => handleChangeQuantity(item.car.id, item.q, next)}
+                  onRemoveRequest={() => setConfirmRemove({ car: item.car, quantity: item.q })}
+                />
+              );
+            })}
           </View>
         )}
       </Animated.ScrollView>

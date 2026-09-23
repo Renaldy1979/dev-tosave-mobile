@@ -9,7 +9,7 @@ import {
 } from "react";
 import {
   addToCollection,
-  getCollection,
+  getCollectionPaged,
   getCollectionSummary,
   removeFromCollection,
   setCollectionQuantity,
@@ -47,6 +47,9 @@ type CollectionState = {
   version: number;
   /** Usado pela UI: nada a exibir enquanto carrega a primeira vez. */
   loaded: boolean;
+  /** A última carga falhou (o store mantém o que já tinha). A Coleção
+   *  mostra `ErrorState` quando não há nada carregado. */
+  error: boolean;
 };
 
 type CollectionActions = {
@@ -73,6 +76,7 @@ export function CollectionProvider({ children }: CollectionProviderProps) {
   const [summary, setSummary] = useState<CollectionSummary>(emptySummary);
   const [version, setVersion] = useState(0);
   const [loaded, setLoaded] = useState(false);
+  const [error, setError] = useState(false);
 
   const recomputeSummary = useCallback((next: Record<string, number>) => {
     const values = Object.values(next);
@@ -87,35 +91,44 @@ export function CollectionProvider({ children }: CollectionProviderProps) {
       setItems({});
       setCarsById({});
       setSummary(emptySummary);
+      setError(false);
       setLoaded(true);
       return;
     }
     try {
-      const [list, sum] = await Promise.all([
-        getCollection(),
+      // Carrega a 1ª página (até 1000 itens cabe a maioria dos
+      // colecionadores; a paginação por cursor fica para uma 2ª
+      // rodada — registrada no briefing).
+      const [paged, sum] = await Promise.all([
+        getCollectionPaged({ pageSize: 1000 }),
         getCollectionSummary(),
       ]);
       const map: Record<string, number> = {};
       const cars: Record<string, Car> = {};
-      list.forEach((it: CollectionItemWithCar) => {
+      paged.items.forEach((it: CollectionItemWithCar) => {
         map[it.carId] = it.quantity;
         cars[it.carId] = it.car;
       });
       setItems(map);
       setCarsById(cars);
       setSummary(sum);
+      setError(false);
       setLoaded(true);
-    } catch {
-      // Mantém o estado anterior e marca como carregado para a UI não
-      // travar; Toast é responsabilidade de quem chamou.
+    } catch (err) {
+      // Mantém o estado anterior, marca o erro e repassa: quem chamou
+      // decide o feedback (Toast no pull-to-refresh, ErrorState na
+      // Coleção vazia).
+      setError(true);
       setLoaded(true);
+      throw err;
     }
   }, [user]);
 
   // Reage ao user: entra → carrega a coleção; sai → limpa.
   useEffect(() => {
     setLoaded(false);
-    void refresh();
+    // O erro fica em `error`; aqui não há quem mostre Toast.
+    refresh().catch(() => undefined);
   }, [refresh, user?.id]);
 
   const toggle = useCallback(
@@ -224,6 +237,7 @@ export function CollectionProvider({ children }: CollectionProviderProps) {
       summary,
       version,
       loaded,
+      error,
       toggle,
       setQuantity: setQuantityAction,
       remove: removeAction,
@@ -235,6 +249,7 @@ export function CollectionProvider({ children }: CollectionProviderProps) {
       summary,
       version,
       loaded,
+      error,
       toggle,
       setQuantityAction,
       removeAction,
