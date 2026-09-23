@@ -18,14 +18,13 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useDelayedFlag } from "@/hooks/useDelayedFlag";
 import { useGridColumns } from "@/hooks/useGridColumns";
 import { useCollectionStore } from "@/hooks/useCollectionStore";
-import { getCollection, setCollectionQuantity } from "@/services";
-import { listBrands, listSeries } from "@/services";
-import type { Brand, Car, CarListItem, Serie } from "@/types";
+import { listBrands, listSeries, setCollectionQuantity } from "@/services";
+import type { Brand, CarListItem, Serie } from "@/types";
 import { ScreenContainer } from "@/components/ui/ScreenContainer";
 import { Header } from "@/components/ui/Header";
 import { Text } from "@/components/ui/Text";
 import { SearchBar } from "@/components/ui/SearchBar";
-import { StatTile, StatTileSkeleton } from "@/components/ui/StatTile";
+import { StatTile } from "@/components/ui/StatTile";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -53,8 +52,9 @@ const SORT_OPTIONS: { value: SortOption; label: string }[] = [
  * + ordenação (BottomSheet) + grid 2 colunas com stepper glass no card.
  * Empty states oficiais + LoginGate quando não há sessão.
  *
- * Lê do store compartilhado (`useCollectionStore`) para ficar em
- * sincronia com a TabBar e o coração dos cards das outras telas.
+ * Fonte única: `useCollectionStore` (store de módulo). Não há `getCollection`
+ * local — o Provider já carrega o `carsById` e o resumo. A Coleção só
+ * consome o store e renderiza.
  */
 export default function Colecao() {
   const router = useRouter();
@@ -78,19 +78,9 @@ export default function Colecao() {
   const [sort, setSort] = useState<SortOption>("recent");
   const [sortOpen, setSortOpen] = useState(false);
 
-  // Catálogo de carros e marcas/séries — só para resolver nomes
-  // e popular os cards.
-  const [cars, setCars] = useState<Car[]>([]);
+  // Marcas e Séries (apenas para resolver `brandName` e `serieTitle` dos cards).
   const [brands, setBrands] = useState<Brand[]>([]);
   const [series, setSeries] = useState<Serie[]>([]);
-  // `loadState` controla a carga inicial (mostra skeleton full-screen).
-  // `searching` é separado para que o SearchBar/segmented não desmontem
-  // enquanto o usuário digita (item 5 da revisão).
-  const [loadState, setLoadState] = useState<"loading" | "ok" | "error">("loading");
-  const [searching, setSearching] = useState(false);
-  const showSkeleton = useDelayedFlag(loadState === "loading", 150);
-
-  // Carrega marcas e séries (cache leve para resolver nomes).
   useEffect(() => {
     void Promise.all([listBrands(), listSeries()])
       .then(([b, s]) => {
@@ -100,54 +90,35 @@ export default function Colecao() {
       .catch(() => undefined);
   }, []);
 
-  // Carrega carros para resolver nome/título nos cards.
-  const loadCars = useCallback(
-    async (showLoading = true) => {
-      if (!user) {
-        setCars([]);
-        setLoadState("ok");
-        return;
-      }
-      if (showLoading) setLoadState("loading");
-      try {
-        const list = await getCollection(user.id);
-        const carsResolved: Car[] = list.map((it) => it.car);
-        setCars(carsResolved);
-        setLoadState("ok");
-      } catch {
-        setLoadState("error");
-      }
-    },
-    [user]
-  );
-
-  // Refilter local quando o termo / filtro mudam (sem precisar de fetch).
+  // Sinal "searching" local, só para feedback do skeleton durante a busca
+  // — sem isso, a UI pisca entre estados a cada keystroke.
+  const [searching, setSearching] = useState(false);
   useEffect(() => {
-    if (loadState !== "ok") return;
+    if (!collection.loaded) return;
     setSearching(true);
-    // Como o filtro é local (Object.values do store), só precisamos
-    // sinalizar "buscando" por um instante; o useMemo recalcula.
     const t = setTimeout(() => setSearching(false), 120);
     return () => clearTimeout(t);
-  }, [debouncedTerm, duplicatesOnly, loadState]);
+  }, [debouncedTerm, duplicatesOnly, collection.loaded]);
 
-  useEffect(() => {
-    void loadCars();
-  }, [loadCars]);
-
-  // Resolver nomes para cards.
-  const brandNameOf = useCallback((id: string) => brands.find((b) => b.id === id)?.name ?? "", [brands]);
+  const brandNameOf = useCallback(
+    (id: string) => brands.find((b) => b.id === id)?.name ?? "",
+    [brands]
+  );
   const serieTitleOf = useCallback(
     (id: string) => series.find((s) => s.id === id)?.title ?? "",
     [series]
   );
   const toListItem = useCallback(
-    (car: Car): CarListItem => ({
-      ...car,
-      brandName: brandNameOf(car.brandId),
-      serieTitle: serieTitleOf(car.serieId),
-    }),
-    [brandNameOf, serieTitleOf]
+    (carId: string): CarListItem | null => {
+      const car = collection.carsById[carId];
+      if (!car) return null;
+      return {
+        ...car,
+        brandName: brandNameOf(car.brandId),
+        serieTitle: serieTitleOf(car.serieId),
+      };
+    },
+    [collection.carsById, brandNameOf, serieTitleOf]
   );
 
   // Lista filtrada (busca + repetidos) e ordenada.
@@ -155,14 +126,16 @@ export default function Colecao() {
     const entries = Object.entries(collection.items)
       .filter(([, q]) => q > 0)
       .map(([carId, q]) => ({ carId, q }));
-    const map = new Map(cars.map((c) => [c.id, c]));
     let arr = entries
       .map((e) => {
-        const car = map.get(e.carId);
+        const listItem = toListItem(e.carId);
+        if (!listItem) return null;
+        // `q` é o quantity do item; o store tem o `Car` resolvido.
+        const car = collection.carsById[e.carId];
         if (!car) return null;
         return { car, q: e.q };
       })
-      .filter((v): v is { car: Car; q: number } => v !== null);
+      .filter((v): v is { car: NonNullable<ReturnType<typeof toListItem>>; q: number } => v !== null);
     if (debouncedTerm.trim()) {
       const term = debouncedTerm.toLowerCase();
       arr = arr.filter(
@@ -191,75 +164,79 @@ export default function Colecao() {
         arr.sort((a, b) => b.car.year - a.car.year);
     }
     return arr;
-  }, [cars, collection.items, debouncedTerm, duplicatesOnly, sort]);
+  }, [collection.items, collection.carsById, toListItem, debouncedTerm, duplicatesOnly, sort]);
 
   const summary = collection.summary;
   const collectionIsEmpty = collection.summary.totalItems === 0;
+  const showSkeleton = useDelayedFlag(!collection.loaded, 150);
 
   // ----- Ações -----
   const handleChangeQuantity = useCallback(
-    async (car: Car, current: number, next: number) => {
-      if (!user) return;
+    async (carId: string, current: number, next: number) => {
       if (next <= 0) {
-        setConfirmRemove({ car, quantity: current });
+        const car = collection.carsById[carId];
+        if (car) setConfirmRemove({ car, quantity: current });
         return;
       }
       try {
-        await collection.setQuantity(car.id, next);
+        await collection.setQuantity(carId, next);
       } catch {
         show({ type: "danger", message: "Não foi possível atualizar sua coleção." });
       }
     },
-    [user, collection, show]
+    [collection, show]
   );
 
   const handleRemove = useCallback(
-    async (car: Car) => {
-      if (!user) return;
-      const previous = collection.items[car.id] ?? 0;
+    async (carId: string) => {
+      const previous = collection.items[carId] ?? 0;
       try {
-        await collection.remove(car.id);
+        await collection.remove(carId);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => undefined);
-        show({
-          type: "info",
-          message: "Removida da sua coleção.",
-          action: {
-            label: "Desfazer",
-            onPress: async () => {
-              await setCollectionQuantity(user.id, car.id, previous);
-              await collection.refresh();
+        if (user) {
+          show({
+            type: "info",
+            message: "Removida da sua coleção.",
+            action: {
+              label: "Desfazer",
+              onPress: async () => {
+                await setCollectionQuantity(user.id, carId, previous);
+                await collection.refresh();
+              },
             },
-          },
-        });
+          });
+        }
       } catch {
         show({ type: "danger", message: "Não foi possível atualizar sua coleção." });
       }
       setConfirmRemove(null);
     },
-    [user, collection, show]
+    [collection, show, user]
   );
 
-  // ConfirmDialog state
-  const [confirmRemove, setConfirmRemove] = useState<{ car: Car; quantity: number } | null>(null);
+  const [confirmRemove, setConfirmRemove] = useState<
+    { car: { id: string; title: string }; quantity: number } | null
+  >(null);
+  const [sheet, setSheet] = useState<{ carId: string; quantity: number } | null>(null);
 
-  // Long-press sheet
-  const [sheet, setSheet] = useState<{ car: Car; quantity: number } | null>(null);
-
-  const handleLongPress = useCallback((car: Car, quantity: number) => {
-    Haptics.selectionAsync().catch(() => undefined);
-    setSheet({ car, quantity });
-  }, []);
+  const handleLongPress = useCallback(
+    (carId: string, quantity: number) => {
+      Haptics.selectionAsync().catch(() => undefined);
+      setSheet({ carId, quantity });
+    },
+    []
+  );
 
   const refresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await Promise.all([collection.refresh(), loadCars()]);
+      await collection.refresh();
     } catch {
       show({ type: "danger", message: "Não foi possível atualizar." });
     } finally {
       setRefreshing(false);
     }
-  }, [collection, loadCars, show]);
+  }, [collection, show]);
 
   // Header scrollY
   const scrollY = useSharedValue(0);
@@ -267,7 +244,9 @@ export default function Colecao() {
     scrollY.value = event.contentOffset.y;
   });
 
-  // LoginGate
+  // LoginGate: só renderiza quando o store ainda não tem dados e não
+  // há usuário — evita flash de "você não está logado" enquanto o
+  // bootstrap carrega.
   if (!user) {
     return (
       <ScreenContainer bg="bg" edges={["bottom"]} className="bg-bg">
@@ -303,9 +282,8 @@ export default function Colecao() {
           <RefreshControl tintColor={c("primary")} refreshing={refreshing} onRefresh={refresh} />
         }
       >
-        {/* Resumo StatTiles (esconde quando vazio e enquanto carrega,
-            per spec — item 25 da revisão). */}
-        {!collectionIsEmpty && !showSkeleton && loadState !== "error" ? (
+        {/* Resumo StatTiles (esconde quando vazio e enquanto carrega). */}
+        {!collectionIsEmpty && !showSkeleton ? (
           <View className="px-4 mt-3">
             <View className="rounded-lg bg-surface border border-border p-3 flex-row">
               <StatTile
@@ -330,8 +308,8 @@ export default function Colecao() {
 
         {/* Busca + Filtro Todos | Repetidos + Ordenação — sempre visíveis
             quando há itens na coleção, inclusive durante o skeleton inicial
-            e enquanto o usuário digita (item 5 da revisão). */}
-        {!collectionIsEmpty && loadState !== "error" ? (
+            e enquanto o usuário digita. */}
+        {!collectionIsEmpty && collection.loaded ? (
           <View className="px-4 mt-4 gap-3">
             <SearchBar
               value={term}
@@ -369,7 +347,8 @@ export default function Colecao() {
           </View>
         ) : null}
 
-        {/* Conteúdo */}
+        {/* Conteúdo: o store já carregou → renderiza. Sem dois
+            carregamentos concorrentes. */}
         {showSkeleton ? (
           <View className="px-3 mt-4">
             <CarGridSkeleton numColumns={columns} />
@@ -385,16 +364,12 @@ export default function Colecao() {
               }}
             />
           </View>
-        ) : loadState === "error" ? (
-          <View className="py-12">
-            <ErrorState onRetry={() => loadCars(true)} />
-          </View>
         ) : searching && visibleItems.length === 0 ? (
           <View className="px-3 mt-4">
             <CarGridSkeleton numColumns={columns} />
           </View>
         ) : visibleItems.length === 0 ? (
-          // filtro "reputidos" ou busca sem itens — texto oficial da spec.
+          // filtro "repetidos" ou busca sem itens — texto oficial da spec.
           <View className="px-8 py-8 items-center">
             <EmptyState
               kind="no-cars"
@@ -415,21 +390,25 @@ export default function Colecao() {
               numColumns={columns}
               keyExtractor={(item) => item.car.id}
               contentContainerStyle={{ paddingHorizontal: 12, gap: 12 }}
-              renderItem={({ item }) => (
-                <View style={{ width: `${100 / columns}%` }}>
-                  <CarCard
-                    car={toListItem(item.car)}
-                    variant="collection"
-                    quantity={item.q}
-                    onPress={() => router.push(`/car/${item.car.id}`)}
-                    onLongPress={() => handleLongPress(item.car, item.q)}
-                    onChangeQuantity={(next) => handleChangeQuantity(item.car, item.q, next)}
-                    onRemoveRequest={() =>
-                      setConfirmRemove({ car: item.car, quantity: item.q })
-                    }
-                  />
-                </View>
-              )}
+              renderItem={({ item }) => {
+                const listItem = toListItem(item.car.id);
+                if (!listItem) return null;
+                return (
+                  <View style={{ width: `${100 / columns}%` }}>
+                    <CarCard
+                      car={listItem}
+                      variant="collection"
+                      quantity={item.q}
+                      onPress={() => router.push(`/car/${item.car.id}`)}
+                      onLongPress={() => handleLongPress(item.car.id, item.q)}
+                      onChangeQuantity={(next) => handleChangeQuantity(item.car.id, item.q, next)}
+                      onRemoveRequest={() =>
+                        setConfirmRemove({ car: item.car, quantity: item.q })
+                      }
+                    />
+                  </View>
+                );
+              }}
             />
           </View>
         )}
@@ -472,7 +451,11 @@ export default function Colecao() {
       <BottomSheet
         open={sheet !== null}
         onClose={() => setSheet(null)}
-        title={sheet ? sheet.car.title : ""}
+        title={
+          sheet
+            ? collection.carsById[sheet.carId]?.title ?? ""
+            : ""
+        }
         snapPoints="dynamic"
       >
         <View className="pb-2">
@@ -481,7 +464,7 @@ export default function Colecao() {
             label="Ver detalhes"
             onPress={() => {
               if (!sheet) return;
-              const id = sheet.car.id;
+              const id = sheet.carId;
               setSheet(null);
               router.push(`/car/${id}`);
             }}
@@ -493,9 +476,13 @@ export default function Colecao() {
             showChevron={false}
             onPress={() => {
               if (!sheet) return;
-              const car = sheet.car;
-              const brandName = brands.find((b) => b.id === car.brandId)?.name ?? "";
-              const serieTitle = series.find((s) => s.id === car.serieId)?.title ?? "";
+              const car = collection.carsById[sheet.carId];
+              if (!car) {
+                setSheet(null);
+                return;
+              }
+              const brandName = brandNameOf(car.brandId);
+              const serieTitle = serieTitleOf(car.serieId);
               setSheet(null);
               void (async () => {
                 const ok = await shareCar({
@@ -520,7 +507,10 @@ export default function Colecao() {
             showChevron={false}
             onPress={() => {
               if (!sheet) return;
-              setConfirmRemove({ car: sheet.car, quantity: sheet.quantity });
+              setConfirmRemove({
+                car: { id: sheet.carId, title: collection.carsById[sheet.carId]?.title ?? "" },
+                quantity: sheet.quantity,
+              });
               setSheet(null);
             }}
           />
@@ -533,13 +523,11 @@ export default function Colecao() {
         onClose={() => setConfirmRemove(null)}
         title="Remover da coleção?"
         description={
-          confirmRemove
-            ? `${confirmRemove.car.title} sai da sua coleção.`
-            : undefined
+          confirmRemove ? `${confirmRemove.car.title} sai da sua coleção.` : undefined
         }
         onConfirm={async () => {
           if (!confirmRemove) return;
-          await handleRemove(confirmRemove.car);
+          await handleRemove(confirmRemove.car.id);
         }}
       />
     </ScreenContainer>

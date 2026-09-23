@@ -19,7 +19,6 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/theme/ThemeProvider";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { useRequireSession } from "@/hooks/useRequireSession";
 import { useDelayedFlag } from "@/hooks/useDelayedFlag";
 import { useCollectionStore } from "@/hooks/useCollectionStore";
 import {
@@ -61,7 +60,6 @@ export default function CarDetalhe() {
   const insets = useSafeAreaInsets();
   const { c } = useTheme();
   const { user } = useCurrentUser();
-  const requireSession = useRequireSession();
   const { show } = useToast();
 
   const [detail, setDetail] = useState<CarDetail | null>(null);
@@ -130,37 +128,39 @@ export default function CarDetalhe() {
 
   // ----- Ações -----
   const handleAdd = useCallback(async () => {
-    if (!user || !detail) {
-      requireSession({ intent: "add", carId: detail?.id ?? "" });
-      return;
-    }
+    if (!detail) return;
+    // Para visitante, o store cuida de abrir o login via `onRequireSession`.
     try {
       await collection.toggle(detail.id);
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
-      show({
-        type: "success",
-        message: "Adicionada à sua coleção.",
-        action: { label: "Ver", onPress: () => router.navigate("/colecao") },
-      });
+      // Se o usuário não estava logado, o store não fez a operação —
+      // não disparamos Toast de sucesso nesse caso.
+      if (collection.items[detail.id] && collection.items[detail.id]! > 0) {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
+        show({
+          type: "success",
+          message: "Adicionada à sua coleção.",
+          action: { label: "Ver", onPress: () => router.navigate("/colecao") },
+        });
+      }
     } catch {
       show({ type: "danger", message: "Não foi possível atualizar sua coleção." });
     }
-  }, [user, detail, collection, requireSession, show, router]);
+  }, [detail, collection, show, router]);
 
   const handleChangeQuantity = useCallback(
     async (next: number) => {
-      if (!user || !detail) return;
+      if (!detail) return;
       try {
         await collection.setQuantity(detail.id, next);
       } catch {
         show({ type: "danger", message: "Não foi possível atualizar sua coleção." });
       }
     },
-    [user, detail, collection, show]
+    [detail, collection, show]
   );
 
   const handleRemove = useCallback(async () => {
-    if (!user || !detail) return;
+    if (!detail) return;
     try {
       await collection.remove(detail.id);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => undefined);
@@ -168,7 +168,7 @@ export default function CarDetalhe() {
     } catch {
       show({ type: "danger", message: "Não foi possível atualizar sua coleção." });
     }
-  }, [user, detail, collection, show]);
+  }, [detail, collection, show]);
 
   // ----- Dados derivados -----
   const images = useMemo(() => {
