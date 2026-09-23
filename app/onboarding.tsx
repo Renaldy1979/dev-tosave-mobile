@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Dimensions, FlatList, View, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
 import { router } from "expo-router";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Heart, Share2, Layers } from "lucide-react-native";
 import { ScreenContainer } from "@/components/ui/ScreenContainer";
@@ -11,8 +10,8 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { IconButton } from "@/components/ui/IconButton";
 import { LogoCar } from "@/components/ui/Logo";
+import { markOnboardingSeen } from "@/utils/onboarding";
 
-const ONBOARDING_KEY = "tosave.onboarding.seen";
 const SCREEN = Dimensions.get("window");
 
 type Slide = {
@@ -69,11 +68,7 @@ export default function Onboarding() {
   }, [index]);
 
   const finish = useCallback(async () => {
-    try {
-      await AsyncStorage.setItem(ONBOARDING_KEY, "1");
-    } catch {
-      // segue mesmo assim (spec §2.4)
-    }
+    await markOnboardingSeen();
     router.replace("/(tabs)");
   }, []);
 

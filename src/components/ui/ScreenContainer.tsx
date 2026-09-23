@@ -71,7 +71,11 @@ export function ScreenContainer({
   );
 
   if (isInk) {
-    return <ThemeScope>{inner}</ThemeScope>;
+    // O `View` que envolve o conteúdo dentro de ThemeScope precisa de
+    // `flex-1` para preencher o Modal/Screen todo (sem isso, em modal
+    // pageSheet do iOS a árvore colapsa para 0×0 e a tela sai em
+    // branco). Reaplica também a `className` recebida.
+    return <ThemeScope className={cn("flex-1", className)}>{inner}</ThemeScope>;
   }
   return inner;
 }

@@ -197,31 +197,32 @@ export default function Login() {
 
   return (
     <ScreenContainer bg="ink" edges={["bottom"]} className="flex-1">
-      {/* topo ink: palco da logo + watermark */}
+      {/* topo ink: palco da logo + marca d'água (sem props que possam
+          causar layout 0-px em Modal pageSheet do iOS: scale, radius
+          9999, margins negativas). */}
       <View
-        className="relative items-center justify-center overflow-hidden"
-        style={{ height: "30%" }}
+        className="relative items-center justify-center overflow-hidden bg-ink"
+        style={{ height: 220 }}
       >
-        {/* gradiente radial primary/12 — encolhe com teclado via KeyboardAvoidingView */}
+        {/* gradiente radial primary/12 */}
         <View
           pointerEvents="none"
           style={{
             position: "absolute",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
+            top: -120,
+            left: -120,
+            right: -120,
+            bottom: -120,
             backgroundColor: "rgba(253, 132, 1, 0.12)",
-            borderRadius: 9999,
-            transform: [{ scale: 1.4 }],
-            marginTop: -100,
-            marginLeft: -100,
-            marginRight: -100,
+            borderRadius: 220,
           }}
         />
-        {/* marca d'água a 140% da largura */}
-        <View className="absolute" style={{ width: "140%", opacity: 0.06 }}>
-          <LogoCar width={999} />
+        {/* marca d'água com largura limitada */}
+        <View
+          className="absolute items-center justify-center"
+          style={{ width: "100%", height: 220, opacity: 0.06 }}
+        >
+          <LogoCar width={260} />
         </View>
         <View style={{ maxWidth: 440, width: "100%" }} className="items-center">
           <Logo variant="dark" size="md" />
@@ -248,7 +249,13 @@ export default function Login() {
         className="flex-1"
       >
         <ScrollView
-          contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 24, maxWidth: 440, width: "100%", alignSelf: "center" }}
+          contentContainerStyle={{
+            paddingHorizontal: 24,
+            paddingBottom: 24,
+            maxWidth: 440,
+            width: "100%",
+            alignSelf: "center",
+          }}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
@@ -257,7 +264,6 @@ export default function Login() {
             tone="ink"
             className="text-ink-fg"
             accessibilityRole="header"
-            accessibilityViewIsModal
           >
             {copy.title}
           </Text>
