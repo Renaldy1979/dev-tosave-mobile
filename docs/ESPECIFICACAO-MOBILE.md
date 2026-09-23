@@ -30,6 +30,27 @@ Administração (CRUD de carros, séries, marcas, atributos, usuários, settings
 - A fase 2 troca **apenas** o conteúdo de `src/services/` pelas chamadas à API do portal web. Nenhuma tela deve importar mock direto.
 - Login é **simulado** nesta fase (sem autenticação real, sem senha validada contra servidor).
 
+### Critério de pronto da fase 1 — decisão do usuário (23/09/2026)
+
+A fase 1 está pronta quando cada tela:
+
+- **navega e funciona**: nenhum crash, nenhum botão morto, nenhum fluxo sem saída;
+- **está certa nos temas light e dark**: contraste legível, safe area correta, StatusBar coerente;
+- **usa a identidade e os textos oficiais**: paleta, logo, empty states e mensagens de erro;
+- **tem toque mínimo de 44 pt** e rótulos de acessibilidade corretos.
+
+Todo o resto das specs de tela (`docs/design/telas/`) é **fase 1.5 — polimento** e fica registrado em `docs/briefings/fase-1.5-polimento.md`, sem bloquear a entrega. Isso inclui animações, parallax, blur, glow, press scale, haptics finos, TabBar 100% custom, header que colapsa, zoom da galeria, "8 primeiros + Ver todos", buscas recentes e ajustes de desempenho.
+
+Processo por lote:
+1. O Forja implementa.
+2. O Orquestrador verifica `tsc` e o bundle Android/iOS.
+3. A Aquarela faz **uma** revisão e classifica cada item como fase 1 ou fase 1.5.
+4. O Forja corrige só os itens de fase 1.
+5. O usuário testa no Expo Go.
+6. O Ancora commita e dá push.
+
+Não há segunda rodada de revisão do mesmo lote.
+
 ## Telas da fase 1
 
 1. **Onboarding / Splash** — abertura com a logo TOSAVE.
@@ -80,4 +101,4 @@ Dados fake são permitidos **apenas** dentro de `src/mocks/`, porque esta fase �
 
 ## Git
 
-Repositório **local apenas** por enquanto. Conta GitHub do usuário: https://github.com/Renaldy1979, mas o nome do repositório ainda não foi definido e **nenhum push acontece sem confirmação**.
+Repositório remoto: https://github.com/Renaldy1979/dev-tosave-mobile (branch `main`). Push autorizado pelo usuário em 23/09/2026, sempre sem `--force`.
