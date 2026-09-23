@@ -23,7 +23,7 @@ A fase 1 está entregue (tag `v0.1.0-fase1`). A fase 2 vem **antes** do portal w
   - A **API key nunca** vai para o git nem para o app.
   - O app usa só o SDK client (`react-native-appwrite`), com permissões.
 - **Volume:** ~10.000 carros, mais de 20.000 imagens, coleções de ~400 a mais de 1.000 itens por usuário. Nenhuma tela pode carregar a coleção inteira: tudo é paginado e contado no servidor.
-- **Migração:** os carros vêm do Postgres do VPS e as imagens do RustFS do VPS, ambos **somente leitura**. Usuários e coleções atuais são de teste e **não migram**.
+- **Migração:** os carros vêm do Postgres do VPS e as imagens do RustFS do VPS, ambos **somente leitura**. Só a **conta do usuário** (admin, com a mesma senha, via hash bcrypt) e a **coleção dele** (375 modelos) migraram; os outros 7 usuários de teste não. As fotos vêm da pasta local do usuário, já que o RustFS tinha só parte delas.
 - **App travado:** sem login não se navega. Fluxo:
   1. splash;
   2. sem sessão, vai para Login, que oferece **Cadastro**;
@@ -34,6 +34,11 @@ A fase 1 está entregue (tag `v0.1.0-fase1`). A fase 2 vem **antes** do portal w
 - **O contador da aba Coleção sai.** O resumo dentro da tela Coleção continua, lido de estatísticas mantidas no servidor.
 - O login simulado e os dados de `src/mocks/` são substituídos pelo Appwrite. Os mocks podem continuar existindo para desenvolvimento, mas nenhuma tela os usa.
 - Backend: código em `backend/` e especificação em `docs/ESPECIFICACAO-BACKEND.md`. É responsabilidade do agente **Alicerce**.
+
+### Portal web — requisito registrado na fase 2 (23/09/2026)
+
+- **Funcionalidades liberadas por perfil.** O usuário vai deixar **parceiros** entrarem no portal para cadastrar carros e ajudar a subir o banco. **Decidido: o que um parceiro cadastra ou edita passa por aprovação de um admin antes de aparecer no app.** **Parceiro:** cria carros e **só apaga os que ele mesmo criou**, e só se o carro não estiver em nenhuma coleção. Edição dos próprios carros também passa por aprovação (a confirmar com o usuário). Carros de outros e séries, marcas e atributos ficam com admin. A base (times e roles do Appwrite e permissões das tabelas) precisa ser preparada para isso antes de qualquer parceiro entrar.
+- **Importação automática de carros a partir de uma URL** que o usuário já usa como fonte, via script. Antes de automatizar, conferir os termos de uso e os direitos das imagens da fonte.
 
 ### Obrigatório antes de publicar nas lojas (fora do escopo da fase 2, não pode ser esquecido)
 
