@@ -680,7 +680,7 @@ function InitialExplore({
             />
           ))}
         </View>
-      ) : seriesState === "empty" ? null : (
+      ) : seriesState === "empty" || series.length === 0 ? null : (
         <View className="flex-row flex-wrap gap-2 px-4">
           {series.slice(0, 8).map((serie) => (
             <Pressable
@@ -712,7 +712,7 @@ function InitialExplore({
             />
           ))}
         </View>
-      ) : brandsState === "empty" ? null : (
+      ) : brandsState === "empty" || brands.length === 0 ? null : (
         <View className="flex-row flex-wrap gap-2 px-4">
           {brands
             .filter((b) => b.active || b.state !== "em_analise")

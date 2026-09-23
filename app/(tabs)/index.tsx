@@ -369,17 +369,20 @@ function HomeHeader(props: {
                 <ChevronRight color={c("primary-text")} size={16} strokeWidth={1.75} />
               </Pressable>
             </View>
-            {props.seriesState === "loading" && props.showSeriesSkeleton ? (
-              <SeriesRailSkeleton />
+            {props.seriesState === "loading" ? (
+              // Durante o loading, mostra skeleton só depois do atraso
+              // de 150 ms. Antes disso, reserva o espaço com `null` para
+              // não piscar o SeriesRail vazio.
+              props.showSeriesSkeleton ? <SeriesRailSkeleton /> : null
             ) : props.seriesState === "error" ? (
               <ErrorState
                 size="sm"
                 title="Séries indisponíveis"
                 onRetry={props.onRetrySeries}
               />
-            ) : (
+            ) : props.seriesState === "ok" && props.series.length > 0 ? (
               <SeriesRail series={props.series} counts={props.seriesCount} onPress={props.onSeriesPress} />
-            )}
+            ) : null}
           </View>
         ) : null}
 
@@ -418,17 +421,21 @@ function SeriesRail({
   counts: Record<string, number>;
   onPress: (id: string) => void;
 }) {
-  const isSingle = series.length <= 1;
+  // Lista vazia: não renderiza nada (a HomeHeader cuida do estado
+  // vazio separadamente, antes de chegar aqui).
+  if (series.length === 0) return null;
+  const isSingle = series.length === 1;
   if (isSingle) {
+    const only = series[0];
     return (
       <View className="px-4">
         <SeriesCard
-          id={series[0].id}
-          title={series[0].title}
-          description={series[0].description}
-          image={series[0].imagem}
-          carCount={counts[series[0].id] ?? 0}
-          onPress={() => onPress(series[0].id)}
+          id={only.id}
+          title={only.title}
+          description={only.description}
+          image={only.imagem}
+          carCount={counts[only.id] ?? 0}
+          onPress={() => onPress(only.id)}
         />
       </View>
     );
