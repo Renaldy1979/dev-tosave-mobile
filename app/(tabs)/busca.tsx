@@ -1,12 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
   RefreshControl,
+  TextInput,
   View,
 } from "react-native";
 import { FlashList } from "@shopify/flash-list";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { Badge } from "@/components/ui/Badge";
 import Animated, {
@@ -237,11 +238,33 @@ export default function Busca() {
   const [filterOpen, setFilterOpen] = useState(false);
   const [draft, setDraft] = useState<FilterDraft>(() => fromParams(params));
 
+  // Ref para o TextInput do SearchBar (focus imperativo).
+  const searchInputRef = useRef<TextInput>(null);
+
   useEffect(() => {
     if (params.open === "serie" || params.open === "brand" || params.open === "year" || params.open === "attr") {
       setFilterOpen(true);
     }
   }, [params.open]);
+
+  // Foco do campo quando o usuário vem da Home com `focus=1` (item 3
+  // desta rodada — funciona com a tab já montada). `useFocusEffect`
+  // dispara cada vez que a tela recebe foco, inclusive ao voltar para
+  // a tab Buscar. Após focar, limpa o param `focus` para não refocar
+  // ao voltar à tela sem ter vindo da Home.
+  useFocusEffect(
+    useCallback(() => {
+      if (params.focus === "1") {
+        const t = setTimeout(() => {
+          searchInputRef.current?.focus();
+          // Limpa o param para que toques futuros na tab não refocem.
+          router.setParams({ focus: undefined });
+        }, 100);
+        return () => clearTimeout(t);
+      }
+      return undefined;
+    }, [params.focus, router])
+  );
 
   // Sincroniza o rascunho com os params ao abrir
   useEffect(() => {
@@ -443,6 +466,7 @@ export default function Busca() {
           {/* SearchBar */}
           <View className="px-4 mt-2">
             <SearchBar
+              ref={searchInputRef}
               value={term}
               onChangeText={setTerm}
               placeholder="Buscar por nome ou código"
@@ -499,6 +523,7 @@ export default function Busca() {
               {/* SearchBar */}
               <View className="px-4 mt-2">
                 <SearchBar
+                  ref={searchInputRef}
                   value={term}
                   onChangeText={setTerm}
                   placeholder="Buscar por nome ou código"
@@ -582,7 +607,11 @@ export default function Busca() {
 
       <FilterSheet
         open={filterOpen}
-        onClose={() => setFilterOpen(false)}
+        onClose={() => {
+          setFilterOpen(false);
+          // Limpa o param `open` para que voltar à tab não reabra o sheet.
+          router.setParams({ open: undefined });
+        }}
         draft={draft}
         onApply={handleApply}
         onClear={() => {

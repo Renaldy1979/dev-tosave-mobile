@@ -1,3 +1,4 @@
+import { forwardRef, useImperativeHandle, useRef } from "react";
 import { Pressable, TextInput, View } from "react-native";
 import { Search, X } from "lucide-react-native";
 import type { ReactNode } from "react";
@@ -14,6 +15,10 @@ import { Text } from "./Text";
  *
  * `surface: "ink"` aplica o visual para superfícies escuras (topo da
  * Home, modal de login, etc.).
+ *
+ * Repassa `ref` para o `TextInput` interno via `focus()` /
+ * `blur()` imperativos — usado pela Busca quando o usuário chega
+ * com `focus=1` e a tab já está montada.
  */
 type Props = {
   value: string;
@@ -28,19 +33,24 @@ type Props = {
   className?: string;
 };
 
-export function SearchBar({
-  value,
-  onChangeText,
-  onSubmit,
-  placeholder = "Buscar por nome ou código",
-  mode = "input",
-  onPressTrigger,
-  autoFocus = false,
-  rightAction,
-  surface = "default",
-  className,
-}: Props) {
+export const SearchBar = forwardRef<TextInput, Props>(function SearchBar(
+  {
+    value,
+    onChangeText,
+    onSubmit,
+    placeholder = "Buscar por nome ou código",
+    mode = "input",
+    onPressTrigger,
+    autoFocus = false,
+    rightAction,
+    surface = "default",
+    className,
+  },
+  ref
+) {
   const { c } = useTheme();
+  const inputRef = useRef<TextInput>(null);
+  useImperativeHandle(ref, () => inputRef.current as TextInput);
 
   const containerClass =
     surface === "ink"
@@ -86,6 +96,7 @@ export function SearchBar({
     >
       <Search color={iconColor} size={18} strokeWidth={1.75} />
       <TextInput
+        ref={inputRef}
         value={value}
         onChangeText={onChangeText}
         onSubmitEditing={onSubmit}
@@ -110,4 +121,4 @@ export function SearchBar({
       {rightAction}
     </View>
   );
-}
+});
