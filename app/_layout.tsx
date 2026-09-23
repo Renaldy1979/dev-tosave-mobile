@@ -3,6 +3,7 @@ import "./global.css";
 import { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import {
@@ -20,6 +21,7 @@ import { SairaCondensed_600SemiBold } from "@expo-google-fonts/saira-condensed";
 import { JetBrainsMono_500Medium } from "@expo-google-fonts/jetbrains-mono";
 import * as SplashScreen from "expo-splash-screen";
 import { ThemeProvider } from "@/theme/ThemeProvider";
+import { ToastProvider } from "@/components/ui/Toast";
 
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
@@ -47,27 +49,31 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <ThemeProvider>
-          <StatusBar style="light" />
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="index" />
-            <Stack.Screen name="onboarding" />
-            <Stack.Screen
-              name="login"
-              options={{
-                presentation: "modal",
-                animation: "slide_from_bottom",
-              }}
-            />
-            <Stack.Screen name="(tabs)" />
-            <Stack.Screen
-              name="car/[id]"
-              options={{
-                animation: "slide_from_right",
-                gestureEnabled: true,
-                fullScreenGestureEnabled: true,
-              }}
-            />
-          </Stack>
+          <BottomSheetModalProvider>
+            <ToastProvider>
+              <StatusBar style="light" />
+              <Stack screenOptions={{ headerShown: false }}>
+                <Stack.Screen name="index" />
+                <Stack.Screen name="onboarding" />
+                <Stack.Screen
+                  name="login"
+                  options={{
+                    presentation: "modal",
+                    animation: "slide_from_bottom",
+                  }}
+                />
+                <Stack.Screen name="(tabs)" />
+                <Stack.Screen
+                  name="car/[id]"
+                  options={{
+                    animation: "slide_from_right",
+                    gestureEnabled: true,
+                    fullScreenGestureEnabled: true,
+                  }}
+                />
+              </Stack>
+            </ToastProvider>
+          </BottomSheetModalProvider>
         </ThemeProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
