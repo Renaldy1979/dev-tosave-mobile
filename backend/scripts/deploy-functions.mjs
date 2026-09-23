@@ -17,9 +17,8 @@ const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const outDir = path.join(root, ".state", "deploy");
 mkdirSync(outDir, { recursive: true });
 
-// O servidor só habilita node-16.0 (_APP_FUNCTIONS_RUNTIMES); trocar para
-// node-22 quando o runtime for habilitado no VPS.
-const RUNTIME = process.env.FUNCTIONS_RUNTIME ?? "node-16.0";
+// node-22 habilitado no VPS em 23/09/2026 (_APP_FUNCTIONS_RUNTIMES).
+const RUNTIME = process.env.FUNCTIONS_RUNTIME ?? "node-22";
 const DB_EVENTS = (table) => ["create", "update", "delete"].map((a) => `databases.tosave.tables.${table}.rows.*.${a}`);
 
 const FUNCTIONS = [
@@ -75,7 +74,7 @@ for (const def of FUNCTIONS.filter((f) => only.length === 0 || only.includes(f.f
   }
 
   // Endpoint público (https): o interno (http) é redirecionado para https
-  // pelo servidor e o cliente do Node 16 não segue essa troca de protocolo.
+  // pelo servidor, e o cliente HTTP do SDK não segue essa troca de protocolo.
   const { variables } = await functions.listVariables({ functionId: def.functionId });
   const endpointVar = variables.find((v) => v.key === "TOSAVE_ENDPOINT");
   const endpoint = process.env.APPWRITE_ENDPOINT;

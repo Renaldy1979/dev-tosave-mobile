@@ -13,7 +13,7 @@ Contexto de produto: `docs/ESPECIFICACAO-MOBILE.md`, seção "Fase 2".
 | Endpoint / Project ID | nota "Appwrite Credentials" → `backend/.env.local` |
 | SDK servidor | `node-appwrite` **22.1.3** (última linha compatível com 1.8.x; a 23+ é para 1.9) |
 | SDK app | `react-native-appwrite` **0.24.1** fixo (0.12 a 0.24 são para 1.8.x; 0.26+ são para 1.9) |
-| Runtime das Functions | **node-16.0**: é o único habilitado no servidor (`_APP_FUNCTIONS_RUNTIMES`). Migrar para node-22 quando for habilitado no VPS |
+| Runtime das Functions | **node-22** (habilitado no VPS em 23/09/2026) |
 
 ### Segredos
 
@@ -378,11 +378,11 @@ Fases independentes: `--phase=brands|attributes|series|cars|images|meta|verify|a
 | Database `tosave` | 8 tabelas (§3) com colunas, índices e permissões |
 | Bucket `car-images` | leitura pública (`read("any")`, decisão do usuário); escrita só do time `admins`; 10 MB; jpg/jpeg/png/webp; sem compressão, criptografia ou antivírus |
 | Time `admins` | criado; 1 membro (a conta importada) |
-| Functions | `collection`, `catalog-sync` (eventos + agenda 04:00) e `user-cleanup`, todas em `node-16.0` |
+| Functions | `collection`, `catalog-sync` (eventos + agenda 04:00) e `user-cleanup`, todas em `node-22` |
 
 O bucket `cars`, que já existia, **não foi tocado**.
 
-Detalhe das Functions: elas falam com o Appwrite pelo endpoint público (`TOSAVE_ENDPOINT`). O endpoint interno `http` é redirecionado para `https`, e o cliente do Node 16 não segue essa troca.
+Detalhe das Functions: elas falam com o Appwrite pelo endpoint público (`TOSAVE_ENDPOINT`). O endpoint interno `http` é redirecionado para `https`, e o cliente HTTP do SDK não segue essa troca.
 
 ### Scripts (`backend/`, todos idempotentes)
 
@@ -432,7 +432,7 @@ Detalhe das Functions: elas falam com o Appwrite pelo endpoint público (`TOSAVE
 1. ~~Settings → Services: ligar `Account` e `Functions`~~ **Feito pelo usuário.** Validado em 23/09/2026. `Locale` segue desligado, e o app não usa.
 2. **Plataformas (ainda faltam; conferido pelo erro `general_unknown_origin` no login com essas origens):** adicionar Android `host.exp.exponent` e iOS `host.exp.Exponent` (Expo Go). O `app.json` ainda não define `bundleIdentifier`/`package`: quando definir, adicionar também. A API key não tem os scopes `platforms.*`/`projects.*`.
 3. **Auth:** e-mail/senha já vem ligado por padrão e o cadastro é aberto. Não há SMTP (decisão: configurar antes de publicar nas lojas).
-4. **Runtime:** habilitar `node-22` em `_APP_FUNCTIONS_RUNTIMES` no VPS e trocar `FUNCTIONS_RUNTIME` no deploy. O node-16 já está fora de suporte.
+4. ~~**Runtime:** habilitar `node-22`~~ **Feito.** As 3 Functions rodam em `node-22` e a validação passou 18/18. O `node-16.0` pode sair de `_APP_FUNCTIONS_RUNTIMES`.
 
 **Validação completa (`npm run validate`, 23/09/2026): 18/18 OK.** Cobre bcrypt `$2b$`, cadastro, login no cliente, catálogo por cursor, `catalog_meta`, busca, `series.carCount`, `add`/`add`/`set 99`/`remove` pela Function (~350 ms quente), `user_stats`, bloqueio de escrita direta e `user-cleanup`. Os usuários de teste foram apagados.
 
