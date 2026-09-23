@@ -95,7 +95,7 @@ export default function Perfil() {
       await signOut();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
       setSignOutOpen(false);
-      router.replace("/");
+      router.replace("/(tabs)");
     } catch {
       show({ type: "danger", message: "Não foi possível sair agora." });
     } finally {
@@ -239,7 +239,8 @@ export default function Perfil() {
               accessibilityRole="link"
               accessibilityLabel="Explorar miniaturas"
               onPress={() => router.push("/busca")}
-              hitSlop={8}
+              hitSlop={12}
+              style={{ minHeight: 44, justifyContent: "center" }}
               className="self-start mt-2 active:opacity-70"
             >
               <Text variant="body" tone="primary" className="font-sans-medium">
@@ -432,6 +433,7 @@ function EditProfileSheet({
     >
       <View className="px-5 gap-4 pb-2">
         <Input
+          as="sheet"
           label="Nome"
           value={name}
           onChangeText={(t) => {
@@ -444,6 +446,7 @@ function EditProfileSheet({
           placeholder="Seu nome"
         />
         <Input
+          as="sheet"
           label="E-mail"
           value={email}
           onChangeText={(t) => {

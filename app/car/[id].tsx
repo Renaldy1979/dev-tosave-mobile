@@ -10,7 +10,7 @@ import {
   useLocalSearchParams,
   useRouter,
 } from "expo-router";
-import { Archive, Calendar, Hash, Layers, Ruler, Sparkles, Tag } from "lucide-react-native";
+import { Archive, Calendar, Hash, Layers, Palette, Ruler, Sparkles, Tag } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
 import Animated, {
   useAnimatedScrollHandler,
@@ -190,7 +190,7 @@ export default function CarDetalhe() {
           <EmptyState
             kind="no-cars"
             description="Esse carro pode ter sido removido do catálogo."
-            action={{ label: "Voltar ao início", onPress: () => router.replace("/") }}
+            action={{ label: "Voltar ao início", onPress: () => router.replace("/(tabs)") }}
           />
         </View>
       </ScreenContainer>
@@ -202,7 +202,7 @@ export default function CarDetalhe() {
       <ScreenContainer bg="bg" edges={["top", "bottom"]} className="bg-bg">
         <Header variant="stack" title="Detalhe" />
         <View className="flex-1 items-center justify-center px-8">
-          <ErrorState onRetry={load} description={errorMsg ?? undefined} />
+          <ErrorState onRetry={load} />
         </View>
       </ScreenContainer>
     );
@@ -235,34 +235,27 @@ export default function CarDetalhe() {
 
   return (
     <ScreenContainer bg="bg" edges={["bottom"]} className="bg-bg">
-      {/* Galeria + Header transparente (overlay) */}
-      <View className="relative">
-        <CarGallery images={galleryImages} title={detail.title} />
-        <Header
-          variant="transparent"
-          title={detail.title}
-          scrollY={scrollY}
-          className="absolute top-0 left-0 right-0"
-        />
-      </View>
+      {/* Header transparente flutua sobre a galeria. A galeria está
+          DENTRO do ScrollView (item 14 da revisão) — não fica mais fixa. */}
+      <Header
+        variant="transparent"
+        title={detail.title}
+        scrollY={scrollY}
+      />
 
-      {/* Folha surface subindo 16 pt sobre a galeria */}
       <Animated.ScrollView
         ref={scrollRef}
         onScroll={scrollHandler}
         scrollEventThrottle={16}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 16 + insets.bottom + 56 + 24 + 64 }}
-        refreshControl={
-          <RefreshControl
-            tintColor={c("primary")}
-            refreshing={false}
-            onRefresh={load}
-          />
-        }
-        className="flex-1 -mt-4 rounded-t-xl bg-bg"
       >
-        {/* Identidade */}
+        {/* Galeria no topo do scroll (item 14 da revisão). */}
+        <CarGallery images={galleryImages} title={detail.title} />
+
+        {/* Folha surface subindo 16 pt sobre a galeria */}
+        <View className="-mt-4 rounded-t-xl bg-bg">
+          {/* Identidade */}
         <View className="px-4 pt-5">
           <Text variant="eyebrow" tone="subtle" numberOfLines={1}>
             {eyebrow.toUpperCase()}
@@ -283,7 +276,8 @@ export default function CarDetalhe() {
               onPress={() =>
                 router.push({ pathname: "/busca", params: { serie: detail.serieId } })
               }
-              hitSlop={6}
+              hitSlop={10}
+              style={{ minHeight: 44, minWidth: 44, justifyContent: "center" }}
             >
               <Badge variant="primary" size="md">
                 {serieTitle}
@@ -341,7 +335,8 @@ export default function CarDetalhe() {
                 accessibilityRole="button"
                 accessibilityLabel="Ler mais"
                 onPress={() => setDescriptionExpanded(true)}
-                hitSlop={8}
+                hitSlop={12}
+                style={{ minHeight: 44, justifyContent: "center" }}
                 className="mt-2 self-start active:opacity-70"
               >
                 <Text variant="body" tone="primary" className="font-sans-medium">
@@ -354,7 +349,8 @@ export default function CarDetalhe() {
                 accessibilityRole="button"
                 accessibilityLabel="Ler menos"
                 onPress={() => setDescriptionExpanded(false)}
-                hitSlop={8}
+                hitSlop={12}
+                style={{ minHeight: 44, justifyContent: "center" }}
                 className="mt-2 self-start active:opacity-70"
               >
                 <Text variant="body" tone="primary" className="font-sans-medium">
@@ -371,42 +367,56 @@ export default function CarDetalhe() {
             <Text variant="h2">Ficha</Text>
           </View>
           <View className="bg-surface">
-            <InfoRow
-              icon={Tag}
-              label="Marca"
-              value={detail.brand.name}
-              navigate
-              onPress={() =>
-                router.push({ pathname: "/busca", params: { brand: detail.brandId } })
-              }
-            />
-            <InfoRow icon={Hash} label="Número" value={`#${detail.collector}`} copyable />
-            <InfoRow icon={Tag} label="Código (toy)" value={detail.toy} copyable mono />
-            <InfoRow
-              icon={Calendar}
-              label="Ano"
-              value={String(detail.year)}
-              navigate
-              onPress={() =>
-                router.push({ pathname: "/busca", params: { year: String(detail.year) } })
-              }
-            />
-            <InfoRow
-              icon={Layers}
-              label="Série"
-              value={detail.serie.title}
-              navigate
-              onPress={() =>
-                router.push({ pathname: "/busca", params: { serie: detail.serieId } })
-              }
-            />
+            {detail.brand.name ? (
+              <InfoRow
+                icon={Tag}
+                label="Marca"
+                value={detail.brand.name}
+                navigate
+                onPress={() =>
+                  router.push({ pathname: "/busca", params: { brand: detail.brandId } })
+                }
+              />
+            ) : null}
+            {detail.collector ? (
+              <InfoRow icon={Hash} label="Número" value={`#${detail.collector}`} copyable />
+            ) : null}
+            {detail.toy ? (
+              <InfoRow icon={Hash} label="Código (toy)" value={detail.toy} copyable mono />
+            ) : null}
+            {detail.year ? (
+              <InfoRow
+                icon={Calendar}
+                label="Ano"
+                value={String(detail.year)}
+                navigate
+                onPress={() =>
+                  router.push({ pathname: "/busca", params: { year: String(detail.year) } })
+                }
+              />
+            ) : null}
+            {detail.serie?.title ? (
+              <InfoRow
+                icon={Layers}
+                label="Série"
+                value={detail.serie.title}
+                navigate
+                onPress={() =>
+                  router.push({ pathname: "/busca", params: { serie: detail.serieId } })
+                }
+              />
+            ) : null}
             {detail.seriePosition ? (
               <InfoRow icon={Layers} label="Posição" value={detail.seriePosition} mono />
             ) : null}
-            <InfoRow icon={Ruler} label="Escala" value={detail.scale} mono />
-            <InfoRow icon={Sparkles} label="Cor" className="border-b-0">
-              <ColorBadge color={detail.color} />
-            </InfoRow>
+            {detail.scale ? (
+              <InfoRow icon={Ruler} label="Escala" value={detail.scale} mono />
+            ) : null}
+            {detail.color ? (
+              <InfoRow icon={Palette} label="Cor" className="border-b-0">
+                <ColorBadge color={detail.color} />
+              </InfoRow>
+            ) : null}
           </View>
         </View>
 
@@ -423,7 +433,8 @@ export default function CarDetalhe() {
                   onPress={() =>
                     router.push({ pathname: "/busca", params: { attr: attr.id } })
                   }
-                  hitSlop={6}
+                  hitSlop={10}
+                  style={{ minHeight: 44, minWidth: 44, justifyContent: "center" }}
                 >
                   <Badge variant="neutral" size="md" icon={Sparkles}>
                     {attr.title}
@@ -472,9 +483,12 @@ export default function CarDetalhe() {
             </View>
           </View>
         ) : null}
+        </View>
       </Animated.ScrollView>
 
-      {/* ActionBar fixa */}
+      {/* ActionBar fixa. `ScreenContainer edges=["bottom"]` já aplica o
+          inset inferior — o `bottom: 0` deixa o componente começar na
+          borda, então somar `insets.bottom` aqui duplica o valor (item 18). */}
       <View
         pointerEvents="box-none"
         style={{
@@ -482,12 +496,10 @@ export default function CarDetalhe() {
           left: 0,
           right: 0,
           bottom: 0,
-          paddingBottom: Math.max(insets.bottom, 12),
         }}
       >
         <View
-          className="flex-row items-center gap-2 px-4 pt-3 bg-surface border-t border-border"
-          style={{ elevation: 4, shadowColor: "#000", shadowOpacity: 0.1, shadowRadius: 8, shadowOffset: { width: 0, height: -4 } }}
+          className="flex-row items-center gap-2 px-4 pt-3 pb-3 bg-surface border-t border-border"
         >
           <View className="flex-1">
             <ShareWhatsAppButton

@@ -118,8 +118,13 @@ export default function Busca() {
   const [page, setPage] = useState(1);
   const [gridState, setGridState] = useState<"loading" | "ok" | "error" | "empty">("loading");
   const [exactToyMatch, setExactToyMatch] = useState<CarListItem | null>(null);
+  // `showAll` é ligado pelo botão "Todas as miniaturas" do estado
+  // inicial — sem termo e sem filtro, força o grid a aparecer
+  // (item 6 da revisão).
+  const [showAll, setShowAll] = useState(false);
   const showSkeleton = useDelayedFlag(gridState === "loading", 150);
-  const showResults = (term.trim().length > 0 || hasActiveFilter(filters));
+  const showResults =
+    term.trim().length > 0 || hasActiveFilter(filters) || showAll;
 
   // ----- Opções de filtro -----
   const [years, setYears] = useState<number[]>([]);
@@ -254,7 +259,10 @@ export default function Busca() {
   };
 
   const handleClear = () => {
+    setShowAll(false);
+    setTerm("");
     router.setParams({
+      q: undefined,
       year: undefined,
       serie: undefined,
       brand: undefined,
@@ -263,20 +271,17 @@ export default function Busca() {
   };
 
   const handleLiveCount = useCallback(
-    (next: FilterDraft) => {
-      // Contagem aproximada: para o FilterSheet, usamos o `total` atual
-      // quando o rascunho bate com os filtros aplicados (caso comum);
-      // disparamos a Promise em background para atualizar.
+    (next: FilterDraft, onResult: (n: number) => void) => {
       const candidate: CarFilters = {};
       if (debouncedTerm.trim()) candidate.q = debouncedTerm.trim();
       if (next.years.length > 0) candidate.years = next.years;
       if (next.serieId) candidate.serieId = next.serieId;
       if (next.brandId) candidate.brandId = next.brandId;
       if (next.attributeIds.length > 0) candidate.attributeIds = next.attributeIds;
-      void countCars(candidate).then(setTotal);
-      return total;
+      // Em erro, callback nunca dispara → o sheet fica em "Ver resultados".
+      countCars(candidate).then(onResult).catch(() => undefined);
     },
-    [debouncedTerm, total]
+    [debouncedTerm]
   );
 
   // ----- Ações -----
@@ -415,48 +420,52 @@ export default function Busca() {
         scrollY={scrollY}
       />
 
-      <Animated.ScrollView
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-        showsVerticalScrollIndicator={false}
-        onScroll={scrollHandler}
-        scrollEventThrottle={16}
-        contentContainerStyle={{ paddingBottom: bottomPadding }}
-        refreshControl={
-          <RefreshControl
-            tintColor={c("primary")}
-            refreshing={false}
-            onRefresh={() => loadResults(1, true)}
-          />
-        }
-      >
-        {/* SearchBar (sticky visualmente dentro do Header large) */}
-        <View className="px-4 mt-2">
-          <SearchBar
-            value={term}
-            onChangeText={setTerm}
-            placeholder="Buscar por nome ou código"
-            autoFocus={params.focus === "1"}
-            onSubmit={() => {
-              if (term.trim().length >= 2) {
-                router.setParams({ q: term.trim() });
-              }
-            }}
-          />
-        </View>
+      {/* Uma única FlashList com ListHeaderComponent (header da tela) +
+          ListFooterComponent (loading/empty/error/grid footer). A
+          virtualização só funciona fora de ScrollView/Animated.ScrollView
+          (item 7 da revisão). */}
+      {!showResults ? (
+        <Animated.ScrollView
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          showsVerticalScrollIndicator={false}
+          onScroll={scrollHandler}
+          scrollEventThrottle={16}
+          contentContainerStyle={{ paddingBottom: bottomPadding }}
+          refreshControl={
+            <RefreshControl
+              tintColor={c("primary")}
+              refreshing={false}
+              onRefresh={() => loadResults(1, true)}
+            />
+          }
+        >
+          {/* SearchBar */}
+          <View className="px-4 mt-2">
+            <SearchBar
+              value={term}
+              onChangeText={setTerm}
+              placeholder="Buscar por nome ou código"
+              autoFocus={params.focus === "1"}
+              onSubmit={() => {
+                if (term.trim().length >= 2) {
+                  router.setParams({ q: term.trim() });
+                }
+              }}
+            />
+          </View>
 
-        {/* Chips de filtro */}
-        <View className="mt-3">
-          <FilterChipsRow
-            activeFiltersCount={activeFiltersTotal}
-            onOpenFilters={() => setFilterOpen(true)}
-            items={chipItems}
-            onClear={activeFiltersTotal > 0 ? handleClear : undefined}
-          />
-        </View>
+          {/* Chips de filtro */}
+          <View className="mt-3">
+            <FilterChipsRow
+              activeFiltersCount={activeFiltersTotal}
+              onOpenFilters={() => setFilterOpen(true)}
+              items={chipItems}
+              onClear={activeFiltersTotal > 0 ? handleClear : undefined}
+            />
+          </View>
 
-        {/* Estado inicial (sem termo e sem filtro) */}
-        {!showResults ? (
+          {/* Estado inicial (sem termo e sem filtro) */}
           <InitialExplore
             series={series}
             brands={brands}
@@ -465,97 +474,111 @@ export default function Busca() {
             onSelectSerie={(id) => router.setParams({ serie: id })}
             onSelectBrand={(id) => router.setParams({ brand: id })}
             onShowAll={() => {
-              // sem filtro = lista completa (mesma Home)
+              setShowAll(true);
               void loadResults(1, true);
             }}
           />
-        ) : (
-          <>
-            {/* Contagem */}
-            <View className="px-4 mt-4">
-              {gridState === "loading" ? (
-                <Skeleton.Rect style={{ width: 120, height: 14 }} />
-              ) : (
-                <Text variant="body-sm" tone="muted" accessibilityLiveRegion="polite">
-                  {total === 0
-                    ? "Nenhum resultado"
-                    : `${total} ${total === 1 ? "miniatura" : "miniaturas"}`}
-                </Text>
-              )}
-            </View>
-
-            {/* Exact toy match (row destacada) */}
-            {exactToyMatch ? (
+        </Animated.ScrollView>
+      ) : (
+        <FlashList
+          data={items}
+          numColumns={columns}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={{ paddingBottom: bottomPadding }}
+          onEndReached={handleEndReached}
+          onEndReachedThreshold={0.6}
+          refreshControl={
+            <RefreshControl
+              tintColor={c("primary")}
+              refreshing={false}
+              onRefresh={() => loadResults(1, true)}
+            />
+          }
+          ListHeaderComponent={
+            <View>
+              {/* SearchBar */}
               <View className="px-4 mt-2">
-                <View className="flex-row items-center mb-1.5">
-                  <BadgeInline tone="primary">Código exato</BadgeInline>
-                </View>
-                <CarCard
-                  car={exactToyMatch}
-                  variant="row"
-                  inCollection={isInCollection(exactToyMatch.id)}
-                  onPress={() => router.push(`/car/${exactToyMatch.id}`)}
-                  onToggleCollection={() => handleToggleCollection(exactToyMatch)}
+                <SearchBar
+                  value={term}
+                  onChangeText={setTerm}
+                  placeholder="Buscar por nome ou código"
+                  autoFocus={params.focus === "1"}
+                  onSubmit={() => {
+                    if (term.trim().length >= 2) {
+                      router.setParams({ q: term.trim() });
+                    }
+                  }}
                 />
               </View>
-            ) : null}
 
-            {/* Resultados (grid) */}
-            <View className="px-1 mt-3">
-              {showSkeleton ? (
-                <View className="px-3">
-                  <CarGridSkeleton numColumns={columns} />
-                </View>
-              ) : gridState === "empty" ? (
-                <View className="px-8 py-12 items-center">
-                  <EmptyState
-                    kind="no-cars"
-                    description="Tente outro termo ou limpe os filtros."
-                    action={
-                      activeFiltersTotal > 0 || term.trim().length > 0
-                        ? {
-                            label: "Limpar filtros",
-                            onPress: () => {
-                              setTerm("");
-                              handleClear();
-                            },
-                          }
-                        : undefined
-                    }
+              {/* Chips de filtro */}
+              <View className="mt-3">
+                <FilterChipsRow
+                  activeFiltersCount={activeFiltersTotal}
+                  onOpenFilters={() => setFilterOpen(true)}
+                  items={chipItems}
+                  onClear={activeFiltersTotal > 0 ? handleClear : undefined}
+                />
+              </View>
+
+              {/* Contagem */}
+              <View className="px-4 mt-4">
+                {gridState === "loading" ? (
+                  <Skeleton.Rect style={{ width: 120, height: 14 }} />
+                ) : (
+                  <Text variant="body-sm" tone="muted" accessibilityLiveRegion="polite">
+                    {total === 0
+                      ? "Nenhum resultado"
+                      : `${total} ${total === 1 ? "miniatura" : "miniaturas"}`}
+                  </Text>
+                )}
+              </View>
+
+              {/* Exact toy match (row destacada) */}
+              {exactToyMatch ? (
+                <View className="px-4 mt-2">
+                  <View className="flex-row items-center mb-1.5">
+                    <BadgeInline tone="primary">Código exato</BadgeInline>
+                  </View>
+                  <CarCard
+                    car={exactToyMatch}
+                    variant="row"
+                    inCollection={isInCollection(exactToyMatch.id)}
+                    onPress={() => router.push(`/car/${exactToyMatch.id}`)}
+                    onToggleCollection={() => handleToggleCollection(exactToyMatch)}
                   />
                 </View>
-              ) : gridState === "error" ? (
-                <View className="py-12">
-                  <ErrorState onRetry={() => loadResults(1, true)} />
-                </View>
-              ) : (
-                <FlashList
-                  data={items}
-                  numColumns={columns}
-                  keyExtractor={(item) => item.id}
-                  contentContainerStyle={{ paddingHorizontal: 12 }}
-                  onEndReached={handleEndReached}
-                  onEndReachedThreshold={0.6}
-                  renderItem={({ item }) => (
-                    <View style={{ width: `${100 / columns}%`, paddingHorizontal: 4 }}>
-                      <CarCard
-                        car={item}
-                        variant="grid"
-                        inCollection={isInCollection(item.id)}
-                        onPress={() => router.push(`/car/${item.id}`)}
-                        onToggleCollection={() => handleToggleCollection(item)}
-                      />
-                    </View>
-                  )}
-                  ListFooterComponent={
-                    <FooterState state={gridState} total={total} loaded={items.length} />
-                  }
-                />
-              )}
+              ) : null}
             </View>
-          </>
-        )}
-      </Animated.ScrollView>
+          }
+          renderItem={({ item }) => (
+            <View style={{ width: `${100 / columns}%`, paddingHorizontal: 4 }}>
+              <CarCard
+                car={item}
+                variant="grid"
+                inCollection={isInCollection(item.id)}
+                onPress={() => router.push(`/car/${item.id}`)}
+                onToggleCollection={() => handleToggleCollection(item)}
+              />
+            </View>
+          )}
+          ListFooterComponent={
+            <ResultsFooter
+              state={gridState}
+              showSkeleton={showSkeleton}
+              total={total}
+              loaded={items.length}
+              columns={columns}
+              hasFilters={activeFiltersTotal > 0 || term.trim().length > 0}
+              onRetry={() => loadResults(1, true)}
+              onClear={() => {
+                setTerm("");
+                handleClear();
+              }}
+            />
+          }
+        />
+      )}
 
       <FilterSheet
         open={filterOpen}
@@ -728,39 +751,88 @@ function InitialExplore({
   );
 }
 
-function FooterState({
+/**
+ * Rodapé da FlashList: combina os 4 estados que o FooterState antigo
+ * tratava separados (loading, error, empty e "carregando mais").
+ */
+function ResultsFooter({
   state,
+  showSkeleton,
   total,
   loaded,
+  columns,
+  hasFilters,
+  onRetry,
+  onClear,
 }: {
   state: "loading" | "ok" | "error" | "empty";
+  showSkeleton: boolean;
   total: number;
   loaded: number;
+  columns: number;
+  hasFilters: boolean;
+  onRetry: () => void;
+  onClear: () => void;
 }) {
   const { c } = useTheme();
-  if (state === "loading" || state === "empty") return null;
-  if (loaded >= total) {
+  if (showSkeleton) {
+    return (
+      <View className="px-3 mt-3">
+        <CarGridSkeleton numColumns={columns} />
+      </View>
+    );
+  }
+  if (state === "error") {
+    return (
+      <View className="py-12">
+        <ErrorState onRetry={onRetry} />
+      </View>
+    );
+  }
+  if (state === "empty") {
+    return (
+      <View className="px-8 py-12 items-center">
+        <EmptyState
+          kind="no-cars"
+          description="Tente outro termo ou limpe os filtros."
+          action={
+            hasFilters
+              ? {
+                  label: "Limpar filtros",
+                  onPress: onClear,
+                }
+              : undefined
+          }
+        />
+      </View>
+    );
+  }
+  if (state === "ok" && loaded >= total && loaded > 0) {
     return (
       <Text variant="caption" tone="subtle" className="text-center mt-6 mb-2">
         Você viu tudo.
       </Text>
     );
   }
-  return (
-    <View className="px-4 mt-3">
-      <View className="flex-row" style={{ gap: 12 }}>
-        <View style={{ flex: 1 }}>
-          <CarCardSkeleton />
+  if (state === "ok" && loaded < total && loaded > 0) {
+    // "Carregando mais"
+    return (
+      <View className="px-4 mt-3">
+        <View className="flex-row" style={{ gap: 12 }}>
+          <View style={{ flex: 1 }}>
+            <CarCardSkeleton />
+          </View>
+          <View style={{ flex: 1 }}>
+            <CarCardSkeleton />
+          </View>
         </View>
-        <View style={{ flex: 1 }}>
-          <CarCardSkeleton />
+        <View className="items-center py-3">
+          <ActivityIndicator color={c("primary")} size="small" />
         </View>
       </View>
-      <View className="items-center py-3">
-        <ActivityIndicator color={c("primary")} size="small" />
-      </View>
-    </View>
-  );
+    );
+  }
+  return null;
 }
 
 function BadgeInline({ children, tone }: { children: React.ReactNode; tone: "primary" | "flame" }) {

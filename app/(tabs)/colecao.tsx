@@ -10,7 +10,7 @@ import Animated, {
   useAnimatedScrollHandler,
   useSharedValue,
 } from "react-native-reanimated";
-import { ArrowDownUp, ChevronDown, Share2, Trash2 } from "lucide-react-native";
+import { ArrowDownUp, ChevronDown, ExternalLink, Share2, Trash2 } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/theme/ThemeProvider";
@@ -36,6 +36,7 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { ListRow } from "@/components/ui/ListRow";
 import { useToast } from "@/components/ui/Toast";
 import { LoginGate } from "@/components/ui/LoginGate";
+import { shareCar } from "@/components/ui/ShareWhatsAppButton";
 
 type SortOption = "recent" | "name" | "year" | "units";
 const SORT_OPTIONS: { value: SortOption; label: string }[] = [
@@ -82,7 +83,11 @@ export default function Colecao() {
   const [cars, setCars] = useState<Car[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [series, setSeries] = useState<Serie[]>([]);
-  const [loadState, setLoadState] = useState<"loading" | "ok" | "error" | "empty">("loading");
+  // `loadState` controla a carga inicial (mostra skeleton full-screen).
+  // `searching` é separado para que o SearchBar/segmented não desmontem
+  // enquanto o usuário digita (item 5 da revisão).
+  const [loadState, setLoadState] = useState<"loading" | "ok" | "error">("loading");
+  const [searching, setSearching] = useState(false);
   const showSkeleton = useDelayedFlag(loadState === "loading", 150);
 
   // Carrega marcas e séries (cache leve para resolver nomes).
@@ -96,23 +101,35 @@ export default function Colecao() {
   }, []);
 
   // Carrega carros para resolver nome/título nos cards.
-  const loadCars = useCallback(async () => {
-    if (!user) {
-      setCars([]);
-      setLoadState("ok");
-      return;
-    }
-    setLoadState("loading");
-    try {
-      const list = await getCollection(user.id);
-      // Resolver os carros via items
-      const carsResolved: Car[] = list.map((it) => it.car);
-      setCars(carsResolved);
-      setLoadState("ok");
-    } catch {
-      setLoadState("error");
-    }
-  }, [user]);
+  const loadCars = useCallback(
+    async (showLoading = true) => {
+      if (!user) {
+        setCars([]);
+        setLoadState("ok");
+        return;
+      }
+      if (showLoading) setLoadState("loading");
+      try {
+        const list = await getCollection(user.id);
+        const carsResolved: Car[] = list.map((it) => it.car);
+        setCars(carsResolved);
+        setLoadState("ok");
+      } catch {
+        setLoadState("error");
+      }
+    },
+    [user]
+  );
+
+  // Refilter local quando o termo / filtro mudam (sem precisar de fetch).
+  useEffect(() => {
+    if (loadState !== "ok") return;
+    setSearching(true);
+    // Como o filtro é local (Object.values do store), só precisamos
+    // sinalizar "buscando" por um instante; o useMemo recalcula.
+    const t = setTimeout(() => setSearching(false), 120);
+    return () => clearTimeout(t);
+  }, [debouncedTerm, duplicatesOnly, loadState]);
 
   useEffect(() => {
     void loadCars();
@@ -254,7 +271,7 @@ export default function Colecao() {
   if (!user) {
     return (
       <ScreenContainer bg="bg" edges={["bottom"]} className="bg-bg">
-        <Header variant="large" title="Sua coleção" scrollY={scrollY} />
+        <Header variant="large" title="Minha coleção" scrollY={scrollY} />
         <LoginGate
           title="Entre para ver sua coleção"
           description="Suas miniaturas ficam salvas na sua conta."
@@ -273,7 +290,7 @@ export default function Colecao() {
 
   return (
     <ScreenContainer bg="bg" edges={["bottom"]} className="bg-bg">
-      <Header variant="large" title="Sua coleção" subtitle={subTitle} scrollY={scrollY} />
+      <Header variant="large" title="Minha coleção" subtitle={subTitle} scrollY={scrollY} />
 
       <Animated.ScrollView
         keyboardShouldPersistTaps="handled"
@@ -286,8 +303,9 @@ export default function Colecao() {
           <RefreshControl tintColor={c("primary")} refreshing={refreshing} onRefresh={refresh} />
         }
       >
-        {/* Resumo StatTiles (esconde quando vazio, per spec) */}
-        {!collectionIsEmpty ? (
+        {/* Resumo StatTiles (esconde quando vazio e enquanto carrega,
+            per spec — item 25 da revisão). */}
+        {!collectionIsEmpty && !showSkeleton && loadState !== "error" ? (
           <View className="px-4 mt-3">
             <View className="rounded-lg bg-surface border border-border p-3 flex-row">
               <StatTile
@@ -302,7 +320,7 @@ export default function Colecao() {
               />
               <StatTile
                 value={summary.duplicates}
-                label="Repetid."
+                label="Repetidos"
                 onPress={() => router.setParams({ dup: duplicatesOnly ? undefined : "1" })}
                 accessibilityLabel={`${summary.duplicates} modelos repetidos, toque para filtrar`}
               />
@@ -310,8 +328,10 @@ export default function Colecao() {
           </View>
         ) : null}
 
-        {/* Busca + Filtro Todos | Repetidos + Ordenação */}
-        {!collectionIsEmpty && !showSkeleton ? (
+        {/* Busca + Filtro Todos | Repetidos + Ordenação — sempre visíveis
+            quando há itens na coleção, inclusive durante o skeleton inicial
+            e enquanto o usuário digita (item 5 da revisão). */}
+        {!collectionIsEmpty && loadState !== "error" ? (
           <View className="px-4 mt-4 gap-3">
             <SearchBar
               value={term}
@@ -367,18 +387,18 @@ export default function Colecao() {
           </View>
         ) : loadState === "error" ? (
           <View className="py-12">
-            <ErrorState onRetry={loadCars} />
+            <ErrorState onRetry={() => loadCars(true)} />
+          </View>
+        ) : searching && visibleItems.length === 0 ? (
+          <View className="px-3 mt-4">
+            <CarGridSkeleton numColumns={columns} />
           </View>
         ) : visibleItems.length === 0 ? (
-          // filtro "repetidos" ou busca sem itens
+          // filtro "reputidos" ou busca sem itens — texto oficial da spec.
           <View className="px-8 py-8 items-center">
             <EmptyState
               kind="no-cars"
-              description={
-                debouncedTerm.trim()
-                  ? "Tente outro termo ou limpe a busca."
-                  : undefined
-              }
+              description="Tente outro termo ou limpe os filtros."
               action={
                 duplicatesOnly
                   ? { label: "Ver todos", onPress: () => router.setParams({ dup: undefined }) }
@@ -402,6 +422,7 @@ export default function Colecao() {
                     variant="collection"
                     quantity={item.q}
                     onPress={() => router.push(`/car/${item.car.id}`)}
+                    onLongPress={() => handleLongPress(item.car, item.q)}
                     onChangeQuantity={(next) => handleChangeQuantity(item.car, item.q, next)}
                     onRemoveRequest={() =>
                       setConfirmRemove({ car: item.car, quantity: item.q })
@@ -456,13 +477,39 @@ export default function Colecao() {
       >
         <View className="pb-2">
           <ListRow
+            icon={ExternalLink}
+            label="Ver detalhes"
+            onPress={() => {
+              if (!sheet) return;
+              const id = sheet.car.id;
+              setSheet(null);
+              router.push(`/car/${id}`);
+            }}
+          />
+          <View className="border-t border-border" />
+          <ListRow
             icon={Share2}
             label="Compartilhar no WhatsApp"
             showChevron={false}
             onPress={() => {
               if (!sheet) return;
+              const car = sheet.car;
+              const brandName = brands.find((b) => b.id === car.brandId)?.name ?? "";
+              const serieTitle = series.find((s) => s.id === car.serieId)?.title ?? "";
               setSheet(null);
-              show({ type: "info", message: "Use o botão compartilhar na tela do carro." });
+              void (async () => {
+                const ok = await shareCar({
+                  title: car.title,
+                  brandName,
+                  year: car.year,
+                  collector: car.collector,
+                  toy: car.toy,
+                  serieTitle,
+                });
+                if (!ok) {
+                  show({ type: "danger", message: "Não foi possível compartilhar agora." });
+                }
+              })();
             }}
           />
           <View className="border-t border-border" />
