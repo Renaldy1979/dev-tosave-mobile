@@ -85,7 +85,8 @@ export type SignUpResult =
  *
  * Conta criada mas sessão recusada → `session_failed` (a tela manda
  * para o Login com o e-mail preenchido). `user_session_already_exists`
- * conta como sucesso.
+ * conta como sucesso. E-mail já existente com a MESMA senha (envio
+ * duplo ou resposta perdida) também é sucesso: abre a sessão.
  */
 export async function signUp(input: {
   name: string;
@@ -103,7 +104,21 @@ export async function signUp(input: {
       })
     );
   } catch (err) {
-    return { ok: false, error: mapSignUpError(err, input.password) };
+    const error = mapSignUpError(err, input.password);
+    if (error !== "email_in_use") return { ok: false, error };
+    // Idempotente: um envio repetido (ou uma resposta perdida) já criou a
+    // conta. Se a mesma senha abre a sessão, é a mesma pessoa: sucesso.
+    try {
+      await openSession(email, input.password);
+    } catch (sessionErr) {
+      if (isNetwork(sessionErr)) return { ok: false, error: "network" };
+      if (isRateLimited(sessionErr)) return { ok: false, error: "rate_limited" };
+      return { ok: false, error: "email_in_use" };
+    }
+    const existing = await fetchCurrentUser();
+    if (!existing) return { ok: false, error: "session_failed" };
+    setCurrentSession({ user: existing });
+    return { ok: true, user: existing };
   }
   try {
     await openSession(email, input.password);

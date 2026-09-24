@@ -54,7 +54,7 @@ export default function ExcluirConta() {
     else router.replace("/perfil");
   }, [router]);
 
-  const handleSubmit = useCallback(async () => {
+  const doSubmit = useCallback(async () => {
     setBanner(null);
     if (password.length === 0) {
       setPasswordError("Informe sua senha.");
@@ -80,6 +80,19 @@ export default function ExcluirConta() {
   }, [password, router, endLocalSession]);
 
   const hasNumbers = summary.totalItems > 0;
+
+  // Trava contra envio duplo: botão e "enviar" do teclado podem disparar
+  // juntos, e o estado `submitting` só vale no próximo render.
+  const inFlight = useRef(false);
+  const handleSubmit = useCallback(async () => {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    try {
+      await doSubmit();
+    } finally {
+      inFlight.current = false;
+    }
+  }, [doSubmit]);
 
   return (
     <ScreenContainer bg="bg" edges={["bottom"]} className="bg-bg">

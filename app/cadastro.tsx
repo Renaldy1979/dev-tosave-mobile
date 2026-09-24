@@ -118,7 +118,7 @@ export default function Cadastro() {
     else router.replace("/login");
   }, [router]);
 
-  const handleSubmit = useCallback(async () => {
+  const doSubmit = useCallback(async () => {
     setBanner(null);
     if (!validate()) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => undefined);
@@ -223,6 +223,19 @@ export default function Cadastro() {
     },
     []
   );
+
+  // Trava contra envio duplo: botão e "enviar" do teclado podem disparar
+  // juntos, e o estado `submitting` só vale no próximo render.
+  const inFlight = useRef(false);
+  const handleSubmit = useCallback(async () => {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    try {
+      await doSubmit();
+    } finally {
+      inFlight.current = false;
+    }
+  }, [doSubmit]);
 
   return (
     <ScreenContainer bg="ink" edges={["bottom"]} className="flex-1">
