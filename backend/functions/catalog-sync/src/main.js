@@ -162,11 +162,22 @@ export default async ({ req, res, log }) => {
     // Ano do carro (o ano antigo, se mudou, é corrigido na agenda diária).
     if (row.year) await upsertYearCount(db, row.year, await countWhere(db, "cars", "year", row.year));
     if (action === "update") {
-      await propagate(db, "collection_items", ["carId", row.$id], {
-        carTitle: row.title, carToy: row.toy ?? "", carCollector: row.collector ?? "", carYear: row.year,
-        carColor: row.color ?? "", carScale: row.scale ?? "", carSeriePosition: row.seriePosition ?? null,
-        carImageFileId: row.imageFileId ?? null, brandId: row.brandId, serieId: row.serieId, searchText: row.searchText ?? "",
-      });
+      // Regrava as linhas da coleção desse carro (poucas: uma por dono). Sem o
+      // filtro de divergência do propagate(): o Appwrite não aceita array em
+      // notEqual, e carAttributeIds é array.
+      const queries = [Query.equal("carId", row.$id)];
+      const probe = await db.listRows({ databaseId: DATABASE_ID, tableId: "collection_items", queries: [...queries, Query.limit(1)], total: false });
+      if (probe.rows.length > 0) {
+        await db.updateRows({
+          databaseId: DATABASE_ID, tableId: "collection_items", queries,
+          data: {
+            carTitle: row.title, carToy: row.toy ?? "", carCollector: row.collector ?? "", carYear: row.year,
+            carColor: row.color ?? "", carScale: row.scale ?? "", carSeriePosition: row.seriePosition ?? null,
+            carImageFileId: row.imageFileId ?? null, brandId: row.brandId, serieId: row.serieId, searchText: row.searchText ?? "",
+            carAttributeIds: row.attributeIds ?? [],
+          },
+        });
+      }
     }
     if (action === "create" || action === "delete") await fullRecount(db, log);
   } else if (tableId === "series" && action === "update") {

@@ -62,6 +62,7 @@ function denormalize(car) {
     serieId: car.serieId,
     serieTitle: car.serieTitle ?? "",
     searchText: car.searchText ?? "",
+    carAttributeIds: car.attributeIds ?? [],
   };
 }
 

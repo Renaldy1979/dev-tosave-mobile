@@ -62,12 +62,36 @@ const FUNCTIONS = [
     logging: false,
     scopes: ["rows.read"],
   },
+  {
+    functionId: "account-delete",
+    name: "account-delete",
+    execute: ["users"],
+    events: [],
+    schedule: "",
+    timeout: 30,
+    // Desligado: o corpo pode ter a senha.
+    logging: false,
+    scopes: ["users.read", "users.write", "sessions.write", "rows.read", "rows.write"],
+    // "password" (senha atual) ou "word" (digitar EXCLUIR) — decisão da Aquarela.
+    variables: { ACCOUNT_DELETE_CONFIRM: process.env.ACCOUNT_DELETE_CONFIRM ?? "password" },
+  },
 ];
+
+/** Cria ou atualiza variáveis da Function (idempotente). */
+async function ensureVariables(functionId, wanted) {
+  const { variables } = await functions.listVariables({ functionId });
+  for (const [key, value] of Object.entries(wanted)) {
+    const current = variables.find((v) => v.key === key);
+    if (!current) await functions.createVariable({ functionId, key, value, secret: false });
+    else if (current.value !== value) await functions.updateVariable({ functionId, variableId: current.$id, key, value, secret: false });
+  }
+}
 
 const only = process.argv.slice(2);
 for (const def of FUNCTIONS.filter((f) => only.length === 0 || only.includes(f.functionId))) {
+  const { variables: extraVariables = {}, ...fnDef } = def;
   const params = {
-    ...def,
+    ...fnDef,
     runtime: RUNTIME,
     enabled: true,
     entrypoint: "src/main.js",
@@ -85,14 +109,7 @@ for (const def of FUNCTIONS.filter((f) => only.length === 0 || only.includes(f.f
 
   // Endpoint público (https): o interno (http) é redirecionado para https
   // pelo servidor, e o cliente HTTP do SDK não segue essa troca de protocolo.
-  const { variables } = await functions.listVariables({ functionId: def.functionId });
-  const endpointVar = variables.find((v) => v.key === "TOSAVE_ENDPOINT");
-  const endpoint = process.env.APPWRITE_ENDPOINT;
-  if (!endpointVar) {
-    await functions.createVariable({ functionId: def.functionId, key: "TOSAVE_ENDPOINT", value: endpoint, secret: false });
-  } else if (endpointVar.value !== endpoint) {
-    await functions.updateVariable({ functionId: def.functionId, variableId: endpointVar.$id, key: "TOSAVE_ENDPOINT", value: endpoint, secret: false });
-  }
+  await ensureVariables(def.functionId, { TOSAVE_ENDPOINT: process.env.APPWRITE_ENDPOINT, ...extraVariables });
 
   const archive = path.join(outDir, `${def.functionId}.tar.gz`);
   // Caminhos relativos: o GNU tar do Git Bash lê "C:" como host remoto.

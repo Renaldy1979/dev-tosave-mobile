@@ -348,6 +348,46 @@ interface YearProgressRow { year: number; owned: number; carCount: number; pct: 
 - **Tela da série:** o app lê os carros da série no catálogo (`cars` com `equal("serieId")`, ordem de posição, páginas de 100; a maior série tem 520). A **posse daquela série** vem do servidor: `collection_items` com `equal("userId")` e `equal("serieId")`, `select(["carId", "quantity"])`, `limit(600)` (índice `idx_user_serie`), mesclada no store da coleção. Assim coração, contagens e barra andam juntos na hora, e o resultado fica correto para coleções de qualquer tamanho. A Function `serie-progress` continua disponível, mas o app não a usa.
 - **Estatísticas:** o app lê todas as linhas de `user_series_stats` com `owned > 0` (no máximo 357, uma por série existente, em páginas de 100) e ordena por Maior % ou Nome no próprio app. As colunas `pct`/`serieCarCount`/`serieTitle` continuam mantidas pelo servidor para uso futuro.
 
+### Excluir conta (exigência da App Store, 24/09/2026)
+
+**`auth.ts` → `deleteAccount(password)`** → `{ ok: true }` \| `{ ok: false; error: "wrong_password" | "rate_limited" | "network" | "unknown" }`
+
+- Chama a Function **`account-delete`**: síncrona, POST, corpo `{ "password": "<senha atual>" }`. O usuário vem da sessão (header `x-appwrite-user-id`), nunca do corpo.
+- **Confirmação = senha atual** (decisão da Aquarela, `07-perfil.md` §5.1):
+  - O servidor confere a senha criando uma sessão de e-mail e senha para o e-mail do próprio usuário. A API key devolve o id da sessão, e a Function a apaga logo em seguida.
+  - A sessão só vale se for do MESMO usuário que chamou.
+  - A senha nunca é logada (`logging` desligado, nenhum log com o corpo).
+  - O plano B (digitar `EXCLUIR`) existe na mesma Function pela variável `ACCOUNT_DELETE_CONFIRM=word`, mas **não está ativo**.
+- **Respostas:**
+
+  | Resposta | Significado | App |
+  |---|---|---|
+  | 200 `{ ok: true }` | conta apagada | sucesso |
+  | 400 `invalid_request` | sem senha | não deve ocorrer: a UI exige o campo |
+  | 401 `wrong_password` | senha incorreta | erro no campo |
+  | 429 `rate_limited` | 5 falhas em 15 min, por usuário, na tabela `rate_limits` | banner |
+  | 500 `unknown` | falha inesperada | genérico |
+
+  Sem rede: `network`.
+- **O que é apagado, tudo SÍNCRONO antes de responder 200:**
+  - `collection_items`, `user_series_stats` e `user_year_stats` do usuário;
+  - `user_stats`;
+  - o registro de tentativas;
+  - o usuário no Auth (nome, e-mail, senha), com **todas as sessões e memberships**.
+
+  Nada do catálogo. O `user-cleanup` por evento continua como rede de segurança e não encontra nada.
+- **Resposta perdida com a conta já apagada:** se a chamada falhar por rede ou tempo, o app chama `account.get()`. Um 401 significa usuário ou sessão inexistente: a conta foi apagada, então **trate como sucesso** (limpar a sessão local e ir para o Login). Se `account.get()` responder, a conta existe: mostre o erro genérico.
+- **Depois do sucesso:** a sessão já não existe no servidor. O app só limpa o estado local (`silentSignOut`) e navega para o Login, sem chamar `account.deleteSession`.
+- **Validação:** `npm run validate-account-delete`, 9/9 com usuários de teste. Cobre 400, 401, a exclusão com nada sobrando, a sessão morta, o 429 e o bloqueio sem sessão. A conta real nunca é usada.
+
+### `collection_items.carAttributeIds` (24/09/2026)
+
+- Array com os ids de atributo do carro. A Function `collection` preenche ao adicionar, a `catalog-sync` propaga quando o carro muda, e o backfill (`npm run collection-attr-backfill`) grava só essa coluna.
+- **Ids estáveis dos atributos** (uuid da origem, id determinístico):
+  - `T-Hunt` = `64358b3b-5765-4e2c-b27c-d23f67c77e55`;
+  - `Super T-Hunt` = `70c4020e-3824-4b33-b44e-08b20903f515`.
+- As grids de `cars` já trazem `attributeIds`, porque não usam `Query.select`.
+
 ## 10. Plano de migração (origem somente leitura)
 
 ### Acesso

@@ -19,7 +19,9 @@
     "upload-images": "node --env-file=.env.local scripts/upload-images.mjs",
     "series-images": "node --env-file=.env.local scripts/series-images.mjs",
     "user-stats-backfill": "node --env-file=.env.local scripts/user-stats-backfill.mjs",
-    "validate-stats": "node --env-file=.env.local scripts/validate-stats.mjs"
+    "validate-stats": "node --env-file=.env.local scripts/validate-stats.mjs",
+    "validate-account-delete": "node --env-file=.env.local scripts/validate-account-delete.mjs",
+    "collection-attr-backfill": "node --env-file=.env.local scripts/collection-attr-backfill.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1138.0",

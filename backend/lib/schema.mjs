@@ -146,6 +146,8 @@ export const TABLES = [
       str("serieTitle", 120, { xdefault: "" }),
       str("searchText", 400, { xdefault: "" }),
       dt("sourceCreatedAt"),
+      // Atributos do carro (ícones T-Hunt/Super T-Hunt no card da Coleção).
+      str("carAttributeIds", 36, { array: true }),
     ],
     indexes: [
       { key: "uq_user_car", type: "unique", columns: ["userId", "carId"] },
@@ -212,6 +214,19 @@ export const TABLES = [
     indexes: [
       { key: "uq_user_year", type: "unique", columns: ["userId", "year"] },
     ],
+  },
+  {
+    // Tentativas por usuário para ações sensíveis (ex.: excluir conta).
+    // $id = "<ação>_" + sha256(userId)[0:32]. Só o servidor lê e escreve.
+    id: "rate_limits",
+    name: "Rate limits",
+    permissions: [],
+    rowSecurity: true,
+    columns: [
+      int("attempts", { min: 0, xdefault: 0 }),
+      dt("windowStart"),
+    ],
+    indexes: [],
   },
   {
     // Total de carros do catálogo por ano. $id = "y<ano>"; mantida pela catalog-sync.
