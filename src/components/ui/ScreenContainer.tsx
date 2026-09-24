@@ -9,7 +9,7 @@ import { useTheme } from "@/theme/ThemeProvider";
  * Base de toda tela (`componentes.md §C.15`).
  *
  * - `bg`: `bg` (segue o tema) ou `bg-ink` para superfícies escuras
- *   independentes do tema (splash, onboarding, login, TabBar).
+ *   independentes do tema (splash, onboarding, login, header ink da Home).
  * - `edges`: safe area aplicada. Padrão: top + bottom. Para telas
  *   com Header, o Header cuida do topo; passar `edges=["bottom"]`.
  * - `contentClassName`: classes aplicadas no conteúdo interior

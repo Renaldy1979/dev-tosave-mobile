@@ -20,7 +20,7 @@ import type { Car, CollectionItemWithCar, CollectionSummary } from "@/types";
 /**
  * Store compartilhado da coleção (`docs/ESPECIFICACAO-MOBILE.md` — store
  * leve com mapa `carId → quantity`). O coração dos cards (Home, Busca,
- * Detalhe), o painel da Coleção e o badge da TabBar leem daqui, então
+ * Detalhe), o painel da Coleção e o resumo leem daqui, então
  * a contagem e o estado de cada item ficam coerentes sem precisar de
  * fetch em cada tela.
  *

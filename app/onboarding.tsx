@@ -45,7 +45,7 @@ const SLIDES: Slide[] = [
  * vira "Começar" (variant `flame`). "Pular" some no último slide.
  *
  * "Pular" e "Começar" gravam `tosave.onboarding.seen = "1"` e fazem
- * `router.replace("/(tabs)")`. Falha ao gravar não bloqueia a
+ * `router.replace("/(drawer)")`. Falha ao gravar não bloqueia a
  * navegação (spec §2.4).
  */
 export default function Onboarding() {
@@ -69,7 +69,7 @@ export default function Onboarding() {
 
   const finish = useCallback(async () => {
     await markOnboardingSeen();
-    router.replace("/(tabs)");
+    router.replace("/(drawer)");
   }, []);
 
   const isLast = index === SLIDES.length - 1;

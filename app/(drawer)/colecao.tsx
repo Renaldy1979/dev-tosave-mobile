@@ -5,10 +5,7 @@ import {
   View,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import Animated, {
-  useAnimatedScrollHandler,
-  useSharedValue,
-} from "react-native-reanimated";
+import Animated from "react-native-reanimated";
 import { ArrowDownUp, ChevronDown, ExternalLink, Share2, Trash2 } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -250,11 +247,6 @@ export default function Colecao() {
     }
   }, [collection, show]);
 
-  // Header scrollY
-  const scrollY = useSharedValue(0);
-  const scrollHandler = useAnimatedScrollHandler((event) => {
-    scrollY.value = event.contentOffset.y;
-  });
 
   // Fase 2: app travado — sem sessão nunca chegamos aqui. O `_layout`
   // raiz redireciona para `/login` quando a sessão cai.
@@ -262,23 +254,17 @@ export default function Colecao() {
     return null;
   }
 
-  const subTitle =
-    summary.totalItems > 0
-      ? `${summary.totalItems} ${summary.totalItems === 1 ? "miniatura" : "miniaturas"} · ${summary.totalModels} ${summary.totalModels === 1 ? "modelo" : "modelos"}`
-      : undefined;
-
-  const bottomPadding = 56 + insets.bottom + 24;
+  // Sem TabBar: só a safe area inferior + respiro.
+  const bottomPadding = insets.bottom + 24;
 
   return (
     <ScreenContainer bg="bg" edges={["bottom"]} className="bg-bg">
-      <Header variant="large" title="Minha coleção" subtitle={subTitle} scrollY={scrollY} />
+      <Header variant="root" title="Minha coleção" />
 
       <Animated.ScrollView
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
-        onScroll={scrollHandler}
-        scrollEventThrottle={16}
         contentContainerStyle={{ paddingBottom: bottomPadding }}
         refreshControl={
           <RefreshControl tintColor={c("primary")} refreshing={refreshing} onRefresh={refresh} />

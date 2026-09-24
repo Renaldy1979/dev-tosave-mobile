@@ -12,10 +12,7 @@ import {
 import { Lock, LogOut, Moon, RotateCcw, Smartphone, Sun } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
 import Constants from "expo-constants";
-import Animated, {
-  useAnimatedScrollHandler,
-  useSharedValue,
-} from "react-native-reanimated";
+import Animated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/theme/ThemeProvider";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
@@ -38,7 +35,7 @@ import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { ListRow } from "@/components/ui/ListRow";
 import { Logo } from "@/components/ui/Logo";
 import { BottomSheet } from "@/components/ui/BottomSheet";
-import { Dialog } from "@/components/ui/Dialog";
+import { SignOutDialog } from "@/components/navigation/SignOutDialog";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { ProfileSkeleton } from "@/components/car/CarCardSkeleton";
 // LoginGate removido na fase 2 — app travado.
@@ -55,14 +52,14 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
  * logo + versão no rodapé.
  *
  * Requer sessão: sem usuário, renderiza `LoginGate`. Editar perfil abre
- * BottomSheet `dynamic` com inputs validados; Sair abre Dialog de
+ * BottomSheet `dynamic` com inputs validados; Sair abre o SignOutDialog de
  * confirmação.
  */
 export default function Perfil() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { scheme, preference, setPreference } = useTheme();
-  const { user, signOut, refresh } = useCurrentUser();
+  const { user, refresh } = useCurrentUser();
   const { show } = useToast();
 
   const [summary, setSummary] = useState<CollectionSummary | null>(null);
@@ -73,7 +70,6 @@ export default function Perfil() {
   const [editOpen, setEditOpen] = useState(false);
   const [signOutOpen, setSignOutOpen] = useState(false);
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
-  const [signOutLoading, setSignOutLoading] = useState(false);
 
   const loadSummary = useCallback(async () => {
     if (!user) {
@@ -94,21 +90,6 @@ export default function Perfil() {
     void loadSummary();
   }, [loadSummary]);
 
-  const handleSignOut = useCallback(async () => {
-    setSignOutLoading(true);
-    try {
-      await signOut();
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
-      setSignOutOpen(false);
-      // Sem sessão o Login é a raiz; o voltar nunca reabre as tabs.
-      router.replace("/login");
-    } catch {
-      show({ type: "danger", message: "Não foi possível sair agora." });
-    } finally {
-      setSignOutLoading(false);
-    }
-  }, [signOut, router, show]);
-
   const handleReplayOnboarding = useCallback(async () => {
     // Limpa o flag e navega para o onboarding. A próxima abertura do
     // app também verá o onboarding (decisão da revisão do lote 02).
@@ -116,10 +97,6 @@ export default function Perfil() {
     router.replace("/onboarding");
   }, [router]);
 
-  const scrollY = useSharedValue(0);
-  const scrollHandler = useAnimatedScrollHandler((event) => {
-    scrollY.value = event.contentOffset.y;
-  });
 
   // Fase 2: app travado — sem sessão nunca chegamos aqui. O `_layout`
   // raiz redireciona para `/login` quando a sessão cai.
@@ -130,7 +107,7 @@ export default function Perfil() {
   if (userState === "error") {
     return (
       <ScreenContainer bg="bg" edges={["bottom"]} className="bg-bg">
-        <Header variant="large" title="Perfil" scrollY={scrollY} />
+        <Header variant="root" title="Perfil" />
         <View className="flex-1 items-center justify-center px-8">
           <ErrorState
             title="Não foi possível carregar."
@@ -154,18 +131,17 @@ export default function Perfil() {
     const v = (Constants as unknown as { expoConfig?: { version?: string } })?.expoConfig?.version;
     return v ? `Versão ${v}` : "Versão 1.0.0";
   })();
-  const bottomPadding = 56 + insets.bottom + 24;
+  // Sem TabBar: só a safe area inferior + respiro.
+  const bottomPadding = insets.bottom + 24;
 
   const initials = deriveAvatarInitials(user.name);
 
   return (
     <ScreenContainer bg="bg" edges={["bottom"]} className="bg-bg">
-      <Header variant="large" title="Perfil" scrollY={scrollY} />
+      <Header variant="root" title="Perfil" />
 
       <Animated.ScrollView
         showsVerticalScrollIndicator={false}
-        onScroll={scrollHandler}
-        scrollEventThrottle={16}
         contentContainerStyle={{ paddingBottom: bottomPadding }}
         refreshControl={
           <RefreshControl
@@ -325,17 +301,8 @@ export default function Perfil() {
         }}
       />
 
-      {/* Dialog de Sair */}
-      <Dialog
-        open={signOutOpen}
-        onClose={() => setSignOutOpen(false)}
-        title="Sair da sua conta?"
-        description="Você continua podendo explorar as miniaturas, mas precisará entrar de novo para ver sua coleção."
-        actions={[
-          { label: "Sair", variant: "danger", loading: signOutLoading, onPress: handleSignOut },
-          { label: "Cancelar", variant: "secondary", onPress: () => setSignOutOpen(false) },
-        ]}
-      />
+      {/* Sair: o mesmo diálogo do drawer (09-menu-drawer §2.4) */}
+      <SignOutDialog open={signOutOpen} onClose={() => setSignOutOpen(false)} />
 
       {/* BottomSheet "Alterar senha" (fase 2) */}
       <ChangePasswordSheet

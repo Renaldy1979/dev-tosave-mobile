@@ -28,7 +28,7 @@ import { readOnboardingSeen } from "@/utils/onboarding";
  * - 1ª abertura (`onboarding.seen` ausente) → `/onboarding`. Após o
  *   onboarding, o usuário cai em `/login` se não estiver logado.
  * - sem sessão → `/login` (tela cheia, não modal).
- * - com sessão → `/(tabs)`.
+ * - com sessão → `/(drawer)`.
  *
  * Erro ao ler storage: trata como "sem onboarding visto" / "sem
  * sessão" e segue para o destino (spec §1.3).
@@ -69,16 +69,16 @@ export default function Index() {
       }
       if (cancelled) return;
 
-      // Fase 2: app travado. Sem sessão não se entra nas tabs — vai
+      // Fase 2: app travado. Sem sessão não se entra no app — vai
       // para o `/login` (tela cheia). O onboarding continua só na 1ª
       // abertura (antes do login).
-      let dest: "/onboarding" | "/login" | "/(tabs)";
+      let dest: "/onboarding" | "/login" | "/(drawer)";
       if (!seen) {
         dest = "/onboarding";
       } else if (!effectiveSession) {
         dest = "/login";
       } else {
-        dest = "/(tabs)";
+        dest = "/(drawer)";
       }
 
       // Fade out da logo + barra (250 ms), escala 1 → 1.04, depois navega.

@@ -43,7 +43,7 @@ const SIGN_IN_ERROR: Record<SignInError, string> = {
  * - `reason=expired` → banner "Sua sessão expirou. Entre novamente."
  * - `reason=created` → banner "Conta criada. Entre para continuar."
  *
- * Com sessão ativa, vai direto para as tabs.
+ * Com sessão ativa, vai direto para o app.
  */
 export default function Login() {
   const router = useRouter();
@@ -53,10 +53,10 @@ export default function Login() {
   const { user, signIn } = useCurrentUser();
   const { show } = useToast();
 
-  // Com sessão (deep link, ou sessão restaurada), vai para as tabs.
+  // Com sessão (deep link, ou sessão restaurada), vai para o app.
   useEffect(() => {
     if (user) {
-      router.replace("/(tabs)");
+      router.replace("/(drawer)");
     }
   }, [user, router]);
 
@@ -121,7 +121,7 @@ export default function Login() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
     show({ type: "success", message: "Bem-vindo de volta." });
     // O Login é a raiz do stack: `replace`, nunca `back`.
-    router.replace("/(tabs)");
+    router.replace("/(drawer)");
   }, [validate, signIn, email, password, router, show]);
 
   return (

@@ -18,7 +18,7 @@ import { Button } from "./Button";
  *
  * RN `Modal` `transparent` `animationType="fade"` com
  * `statusBarTranslucent` e `navigationBarTranslucent`: cobre o app
- * inteiro, inclusive TabBar, status bar e barra de navegação do
+ * inteiro, inclusive header, status bar e barra de navegação do
  * Android. Backdrop `ink` a 65% (cor explícita, igual nos dois temas),
  * envolvido em `ThemeScope`. Tocar no backdrop ou o back do Android =
  * `onClose` (Cancelar), exceto com uma ação em loading ou

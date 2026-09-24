@@ -14,11 +14,15 @@ import { router } from "expo-router";
 import { useTheme } from "@/theme/ThemeProvider";
 import { Text } from "./Text";
 import { IconButton } from "./IconButton";
+import { RootHeader, type RootHeaderAction } from "@/components/navigation/RootHeader";
 
 /**
  * Header (componentes.md §7).
  *
- * Três variantes:
+ * Variantes:
+ * - `root`        → telas raiz do drawer (`09-menu-drawer.md` §1): `≡`,
+ *                   título (ou Logo com `logo`) e até 1 `action`; `ink`
+ *                   na Home. Fixo, não colapsa.
  * - `stack`       → `bg-surface` + borda, voltar à esquerda, título
  *                   centralizado.
  * - `large`       → barra 52 transparente + título grande h1 que
@@ -36,7 +40,7 @@ import { IconButton } from "./IconButton";
  * Evita o WARN "[Reanimated] Reading from value during component render"
  * e o `setInterval` de 80 ms (item 33 da revisão do lote 02).
  */
-type HeaderVariant = "stack" | "large" | "transparent";
+type HeaderVariant = "root" | "stack" | "large" | "transparent";
 
 type Props = {
   variant?: HeaderVariant;
@@ -48,6 +52,12 @@ type Props = {
   /** Limite (em pt) para começar a colapsar (large) ou fazer fade-in (transparent). */
   collapseAt?: number;
   className?: string;
+  /** `root`: Logo no lugar do título (Home). */
+  logo?: boolean;
+  /** `root`: faixa ink (Home). */
+  ink?: boolean;
+  /** `root`: ação única à direita. */
+  action?: RootHeaderAction;
 };
 
 export function Header({
@@ -59,6 +69,9 @@ export function Header({
   scrollY,
   collapseAt = 44,
   className,
+  logo,
+  ink,
+  action,
 }: Props) {
   const insets = useSafeAreaInsets();
   const { c } = useTheme();
@@ -76,9 +89,13 @@ export function Header({
     if (router.canGoBack()) {
       router.back();
     } else {
-      router.replace("/(tabs)");
+      router.replace("/(drawer)");
     }
   };
+
+  if (variant === "root") {
+    return <RootHeader title={title} logo={logo} ink={ink} action={action} />;
+  }
 
   if (variant === "large") {
     return (

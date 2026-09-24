@@ -47,7 +47,7 @@ import { useToast } from "@/components/ui/Toast";
 /**
  * Tela de detalhe do carro (`docs/design/telas/05-car-detalhe.md`).
  *
- * Stack sobre as tabs (sem TabBar), Header transparente no topo da
+ * Stack sobre o drawer (sem menu), Header transparente no topo da
  * galeria, folha surface subindo 16 pt sobre a galeria. Conteúdo:
  * identidade (marca · ano · escala · título · série/posição),
  * CollectionPanel (se na coleção), Sobre, Ficha técnica, Atributos,
@@ -192,7 +192,7 @@ export default function CarDetalhe() {
           <EmptyState
             kind="no-cars"
             description="Esse carro pode ter sido removido do catálogo."
-            action={{ label: "Voltar ao início", onPress: () => router.replace("/(tabs)") }}
+            action={{ label: "Voltar ao início", onPress: () => router.replace("/(drawer)") }}
           />
         </View>
       </ScreenContainer>

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, View } from "react-native";
 import { FlashList } from "@shopify/flash-list";
 import { useRouter } from "expo-router";
-import { ChevronRight } from "lucide-react-native";
+import { ChevronRight, Search } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/theme/ThemeProvider";
@@ -13,15 +13,14 @@ import { useDelayedFlag } from "@/hooks/useDelayedFlag";
 import { useGridLayout } from "@/hooks/useGridColumns";
 import { useCollectionStore } from "@/hooks/useCollectionStore";
 import { ScreenContainer } from "@/components/ui/ScreenContainer";
+import { Header } from "@/components/ui/Header";
 import { ThemeScope } from "@/components/ui/ThemeScope";
 import { Text } from "@/components/ui/Text";
-import { Logo } from "@/components/ui/Logo";
 import { Button } from "@/components/ui/Button";
 import { SearchBar } from "@/components/ui/SearchBar";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
-import { Avatar, deriveAvatarInitials } from "@/components/ui/Avatar";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { CarCard } from "@/components/car/CarCard";
 import { CarGridSkeleton } from "@/components/car/CarCardSkeleton";
@@ -46,9 +45,9 @@ export default function Home() {
   const collection = useCollectionStore();
   const { show } = useToast();
   const grid = useGridLayout();
-  // A TabBar do expo-router tem 56 pt + inset inferior; somamos 24 de respiro.
+  // Sem TabBar: só a safe area inferior + respiro.
   const insets = useSafeAreaInsets();
-  const bottomPadding = 56 + insets.bottom + 24;
+  const bottomPadding = insets.bottom + 24;
 
   const [series, setSeries] = useState<Serie[]>([]);
   const [seriesCount, setSeriesCount] = useState<Record<string, number>>({});
@@ -191,6 +190,16 @@ export default function Home() {
 
   return (
     <ScreenContainer bg="bg" edges={["bottom"]} statusBar="light" className="bg-bg">
+      <Header
+        variant="root"
+        ink
+        logo
+        action={{
+          icon: Search,
+          accessibilityLabel: "Buscar miniaturas",
+          onPress: () => router.navigate("/busca?focus=1"),
+        }}
+      />
       <FlashList
         data={data}
         numColumns={grid.columns}
@@ -227,8 +236,6 @@ export default function Home() {
             onSearchPress={() => router.push("/busca?focus=1")}
             onSeriesPress={(id) => router.push(`/busca?serie=${id}`)}
             onAllSeriesPress={() => router.push("/busca?open=serie")}
-            onLoginPress={() => router.push("/login")}
-            onAvatarPress={() => router.push("/perfil")}
             collectionCount={collectionCount}
             showSeriesSkeleton={showSeriesSkeleton}
           />
@@ -282,47 +289,16 @@ function HomeHeader(props: {
   onSearchPress: () => void;
   onSeriesPress: (id: string) => void;
   onAllSeriesPress: () => void;
-  onLoginPress: () => void;
-  onAvatarPress: () => void;
   collectionCount: number;
   showSeriesSkeleton: boolean;
 }) {
   const { c } = useTheme();
-  const { user } = useCurrentUser();
   return (
     <ThemeScope className="bg-ink">
+      {/* Logo e menu ficam no Header root (ink) acima; a faixa continua. */}
       <View className="bg-ink px-4 pb-6">
-        {/* linha 1: logo + avatar/entrar */}
-        <View
-          className="flex-row items-center justify-between"
-          style={{ paddingTop: 48 }}
-        >
-          <Logo variant="dark" size="sm" />
-          {user ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Abrir perfil"
-              onPress={props.onAvatarPress}
-              hitSlop={12}
-              className="items-center justify-center"
-              style={{ width: 44, height: 44 }}
-            >
-              <Avatar initials={deriveAvatarInitials(user.name)} size={32} />
-            </Pressable>
-          ) : (
-            <Button
-              label="Entrar"
-              variant="ghost"
-              size="sm"
-              onPress={props.onLoginPress}
-              className="active:bg-white/10"
-              accessibilityLabel="Entrar na sua conta"
-            />
-          )}
-        </View>
-
         {/* saudação */}
-        <View className="mt-4">
+        <View className="mt-2">
           {props.headerFirstName ? (
             <Text variant="body-sm" tone="ink" className="text-ink-fg/60">
               Olá, {props.headerFirstName}

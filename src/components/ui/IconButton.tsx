@@ -17,6 +17,9 @@ type Props = {
   variant?: "ghost" | "secondary" | "glass";
   size?: "sm" | "md" | "lg";
   accessibilityLabel: string;
+  accessibilityHint?: string;
+  /** Estado extra para leitor de tela (ex.: `expanded` do botão de menu). */
+  accessibilityState?: { expanded?: boolean; selected?: boolean };
   onPress: () => void;
   disabled?: boolean;
   className?: string;
@@ -39,6 +42,8 @@ export function IconButton({
   variant = "ghost",
   size = "md",
   accessibilityLabel,
+  accessibilityHint,
+  accessibilityState,
   onPress,
   disabled,
   className,
@@ -59,7 +64,8 @@ export function IconButton({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
-      accessibilityState={{ disabled }}
+      accessibilityHint={accessibilityHint}
+      accessibilityState={{ disabled, ...accessibilityState }}
       hitSlop={hitSlopFor(box)}
       onPress={onPress}
       disabled={disabled}

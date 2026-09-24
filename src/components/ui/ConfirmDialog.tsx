@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Trash2 } from "lucide-react-native";
+import { Trash2, type LucideIcon } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
 import { Dialog } from "./Dialog";
 
@@ -20,6 +20,8 @@ type Props = {
   confirmLabel?: string;
   /** Rótulo do botão de cancelar (padrão "Cancelar"). */
   cancelLabel?: string;
+  /** Ícone do círculo (padrão `Trash2`; o Sair usa `LogOut`). */
+  icon?: LucideIcon;
   onConfirm: () => Promise<void> | void;
 };
 
@@ -30,6 +32,7 @@ export function ConfirmDialog({
   description,
   confirmLabel = "Remover",
   cancelLabel = "Cancelar",
+  icon = Trash2,
   onConfirm,
 }: Props) {
   const [loading, setLoading] = useState(false);
@@ -50,7 +53,7 @@ export function ConfirmDialog({
       onClose={onClose}
       title={title}
       description={description}
-      icon={Trash2}
+      icon={icon}
       iconTone="flame"
       actions={[
         { label: confirmLabel, onPress: handleConfirm, variant: "danger", loading },

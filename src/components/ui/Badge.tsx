@@ -15,7 +15,7 @@ import { Text } from "./Text";
  * - flame    → "Em destaque", "Repetido ×2"
  * - glass    → sobre imagem (`#001`, `8/10`)
  * - outline  → contagem
- * - count    → círculo para o badge numérico sobre o ícone da TabBar
+ * - count    → círculo para contador (ex.: item do menu com `badge`)
  */
 type BadgeVariant =
   | "neutral"
@@ -104,7 +104,7 @@ export function Badge({
 }
 
 /**
- * Círculo numérico para o badge da TabBar (ex.: "12" sobre o coração).
+ * Círculo numérico de contador (ex.: item do menu lateral com `badge`).
  * `max` corta para "99+".
  */
 export function CountBadge({ count, max = 99 }: { count: number; max?: number }) {

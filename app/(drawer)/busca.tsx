@@ -10,10 +10,7 @@ import { FlashList } from "@shopify/flash-list";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { Badge } from "@/components/ui/Badge";
-import Animated, {
-  useAnimatedScrollHandler,
-  useSharedValue,
-} from "react-native-reanimated";
+import Animated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/theme/ThemeProvider";
 // useCurrentUser removido da Busca na fase 2 (app travado).
@@ -76,7 +73,7 @@ export default function Busca() {
   }>();
   const insets = useSafeAreaInsets();
   const { c } = useTheme();
-  // `user` não é checado aqui — a Busca fica dentro do grupo (tabs),
+  // `user` não é checado aqui — a Busca fica dentro do grupo (drawer),
   // protegido pelo Stack, então user está sempre presente.
   const { show } = useToast();
   const grid = useGridLayout();
@@ -107,11 +104,6 @@ export default function Busca() {
     return f;
   }, [debouncedTerm, params.year, params.serie, params.brand, params.attr]);
 
-  // ----- Header scrollY -----
-  const scrollY = useSharedValue(0);
-  const scrollHandler = useAnimatedScrollHandler((event) => {
-    scrollY.value = event.contentOffset.y;
-  });
 
   // ----- Resultados -----
   const [items, setItems] = useState<CarListItem[]>([]);
@@ -430,15 +422,12 @@ export default function Busca() {
     (filters.brandId ? 1 : 0) +
     (filters.attributeIds?.length ?? 0);
 
-  const bottomPadding = 56 + insets.bottom + 24;
+  // Sem TabBar: só a safe area inferior + respiro.
+  const bottomPadding = insets.bottom + 24;
 
   return (
     <ScreenContainer bg="bg" edges={["bottom"]} className="bg-bg">
-      <Header
-        variant="large"
-        title="Buscar"
-        scrollY={scrollY}
-      />
+      <Header variant="root" title="Buscar" />
 
       {/* Uma única FlashList com ListHeaderComponent (header da tela) +
           ListFooterComponent (loading/empty/error/grid footer). A
@@ -449,8 +438,6 @@ export default function Busca() {
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
-          onScroll={scrollHandler}
-          scrollEventThrottle={16}
           contentContainerStyle={{ paddingBottom: bottomPadding }}
           refreshControl={
             <RefreshControl
