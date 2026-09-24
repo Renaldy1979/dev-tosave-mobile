@@ -6,11 +6,13 @@ import {
   previewUrl,
   withServiceError,
   isNotFound,
+  ServiceError,
   Query,
 } from "./_appwrite";
 import type { Models } from "react-native-appwrite";
 import { ExecutionMethod } from "react-native-appwrite";
 import { getCurrentSession } from "./_session";
+import { getCurrentUser } from "./auth";
 import type {
   CollectionItem,
   CollectionItemWithCar,
@@ -204,9 +206,11 @@ export async function getCollection(
  * a UI mostrar `ErrorState` em vez de um empty state falso.
  */
 export async function getCollectionSummary(): Promise<CollectionSummary> {
-  const userId = getCurrentSession().user?.id;
+  // Sem usuário no espelho, consulta a sessão (que o preenche) em vez de
+  // devolver zeros em silêncio.
+  const userId = getCurrentSession().user?.id ?? (await getCurrentUser())?.id;
   if (!userId) {
-    return { totalItems: 0, totalModels: 0, duplicates: 0 };
+    throw new ServiceError("unauthorized", "Sem sessão.");
   }
   try {
     const row = await withServiceError(() =>

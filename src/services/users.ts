@@ -7,6 +7,7 @@ import {
   getCurrentSession,
   setCurrentSession,
 } from "./_session";
+import { getCurrentUser } from "./auth";
 import type { User } from "@/types";
 
 /**
@@ -60,7 +61,8 @@ function toAppUser(u: AppwriteUser): User {
 export async function updateProfile(
   input: UpdateProfileInput
 ): Promise<UpdateProfileResult> {
-  const current = getCurrentSession().user;
+  // Sessão restaurada também preenche o espelho via `getCurrentUser`.
+  const current = getCurrentSession().user ?? (await getCurrentUser());
   if (!current) {
     return { ok: false, error: "unknown" };
   }

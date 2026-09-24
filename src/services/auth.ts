@@ -182,7 +182,11 @@ export async function getCurrentUser(): Promise<User | null> {
   if (cached) return cached;
   try {
     const u = await withServiceError(() => account.get());
-    return toAppUser(u);
+    const user = toAppUser(u);
+    // Sessão restaurada (app reaberto já logado): preenche o espelho dos
+    // services também, não só o store do hook.
+    setCurrentSession({ user });
+    return user;
   } catch (err) {
     if (err instanceof ServiceError && err.code === "unauthorized") return null;
     // rede/desconhecido: também devolve null para a splash conseguir
