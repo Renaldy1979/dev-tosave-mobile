@@ -30,6 +30,9 @@ type Props = {
   accessibilityLabel?: string;
   className?: string;
   style?: StageStyle;
+  /** Fundo do palco (padrão `bg-surface-2`). Logos com transparência
+   *  usam a cor da superfície onde estão. */
+  bgClassName?: string;
 };
 
 /** Dimensões do palco — servem tanto ao `Image` quanto ao placeholder. */
@@ -51,6 +54,7 @@ export function CarImage({
   accessibilityLabel,
   className,
   style,
+  bgClassName = "bg-surface-2",
 }: Props) {
   const [failedUri, setFailedUri] = useState<string | null>(null);
 
@@ -61,6 +65,7 @@ export function CarImage({
         className={className}
         style={style}
         accessibilityLabel={accessibilityLabel}
+        bgClassName={bgClassName}
       />
     );
   }
@@ -78,7 +83,7 @@ export function CarImage({
         setFailedUri(uri);
       }}
       accessibilityLabel={accessibilityLabel}
-      className={cn("bg-surface-2", className)}
+      className={cn(bgClassName, className)}
       style={style}
     />
   );
@@ -90,11 +95,13 @@ export function CarImagePlaceholder({
   className,
   style,
   accessibilityLabel,
+  bgClassName = "bg-surface-2",
 }: {
   scale?: `${number}%`;
   className?: string;
   style?: StageStyle;
   accessibilityLabel?: string;
+  bgClassName?: string;
 }) {
   const { c } = useTheme();
   return (
@@ -102,7 +109,7 @@ export function CarImagePlaceholder({
       accessible={Boolean(accessibilityLabel)}
       accessibilityRole={accessibilityLabel ? "image" : undefined}
       accessibilityLabel={accessibilityLabel}
-      className={cn("bg-surface-2 items-center justify-center overflow-hidden", className)}
+      className={cn(bgClassName, "items-center justify-center overflow-hidden", className)}
       style={style}
     >
       <Image

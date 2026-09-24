@@ -1,17 +1,17 @@
-import { LinearGradient } from "expo-linear-gradient";
 import { Pressable, View } from "react-native";
 import { Text } from "../ui/Text";
 import { Badge } from "../ui/Badge";
 import { CarImage } from "./CarImage";
 
 /**
- * SeriesCard da Home (`componentes.md §C.8`):
- * 280×160 pt, `rounded-lg overflow-hidden`, imagem cover, gradiente
- * preto na base, título h3 branco, descrição 1 linha white/70,
- * Badge flame "Em destaque" no canto superior.
+ * SeriesCard da Home (`componentes.md §C.8`): 280×160 pt,
+ * `rounded-lg`, Badge flame "Em destaque", título e contagem.
  *
- * Sem imagem ou com falha no download: placeholder padrão do
- * `CarImage` (silhueta do logo-car sobre `surface-2`) e o título.
+ * A imagem da série é um LOGO (150×150, WebP com transparência), não
+ * uma capa: vai em `contain`, 96 pt, sobre a cor da superfície do card
+ * — a transparência funciona nos temas light e dark e o logo não é
+ * ampliado nem cortado. Sem imagem ou com falha no download: a
+ * silhueta padrão do `CarImage` no mesmo lugar.
  */
 type Props = {
   id: string;
@@ -22,39 +22,34 @@ type Props = {
   onPress: () => void;
 };
 
-export function SeriesCard({ id, title, description, image, carCount, onPress }: Props) {
+const LOGO_SIZE = 96;
+
+export function SeriesCard({ title, image, carCount, onPress }: Props) {
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`${title}, ${carCount} ${carCount === 1 ? "miniatura" : "miniaturas"}, em destaque`}
       onPress={onPress}
-      className="rounded-lg overflow-hidden bg-surface-2 active:opacity-90"
+      className="rounded-lg overflow-hidden bg-surface border border-border flex-row items-center p-4 gap-4 active:bg-surface-3"
       style={{ width: 280, height: 160 }}
     >
-      <CarImage uri={image} style={{ width: "100%", height: "100%" }} placeholderScale="50%" />
-      {/* gradiente preto 0 → 80% de baixo para cima */}
-      <LinearGradient
-        colors={["rgba(0,0,0,0)", "rgba(0,0,0,0.8)"]}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-        style={{
-          position: "absolute",
-          left: 0,
-          right: 0,
-          bottom: 0,
-          height: 100,
-        }}
+      <CarImage
+        uri={image || null}
+        contentFit="contain"
+        bgClassName="bg-surface"
+        placeholderScale="80%"
+        style={{ width: LOGO_SIZE, height: LOGO_SIZE }}
       />
-      <View className="absolute top-2 left-2">
-        <Badge variant="flame" size="sm">
-          Em destaque
-        </Badge>
-      </View>
-      <View className="absolute bottom-3 left-3 right-3 gap-0.5">
-        <Text variant="h3" className="text-white" numberOfLines={1}>
+      <View className="flex-1 min-w-0 gap-1">
+        <View className="self-start">
+          <Badge variant="flame" size="sm">
+            Em destaque
+          </Badge>
+        </View>
+        <Text variant="h3" numberOfLines={2}>
           {title}
         </Text>
-        <Text variant="body-sm" className="text-white/70" numberOfLines={1}>
+        <Text variant="body-sm" tone="muted" numberOfLines={1}>
           {carCount} {carCount === 1 ? "miniatura" : "miniaturas"}
         </Text>
       </View>

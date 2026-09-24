@@ -150,7 +150,9 @@ function seriesRowToSerie(row: SeriesRow): Serie {
     id: row.$id,
     title: row.title,
     description: row.description ?? "",
-    imagem: row.imageFileId ? imageUrl(row.imageFileId, 800, 80) : "",
+    // Logo da série: 150×150 WebP com transparência. 300 = 2× retina do
+    // original (acima disso o Appwrite só amplia). Sem arquivo → "".
+    imagem: row.imageFileId ? imageUrl(row.imageFileId, 300, 90) : "",
     isDefault: row.isDefault,
     createdAt: "",
   };
