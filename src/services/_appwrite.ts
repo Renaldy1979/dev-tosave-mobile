@@ -53,6 +53,22 @@ export const APPWRITE_FUNCTION_COLLECTION = "collection";
  */
 export const ImageFormatWebp = "webp" as const;
 
+/**
+ * URL de preview (WebP redimensionado) de um arquivo do bucket de
+ * imagens, montada à mão com `encodeURIComponent`: não depende do
+ * `URL`/`searchParams` do runtime (o `getFilePreviewURL` do SDK usa os
+ * dois). O bucket tem leitura pública; `project` basta para o Appwrite.
+ */
+export function previewUrl(fileId: string, width: number, quality: number): string {
+  return (
+    `${APPWRITE_ENDPOINT.replace(/\/+$/, "")}` +
+    `/storage/buckets/${encodeURIComponent(APPWRITE_BUCKET_IMAGES)}` +
+    `/files/${encodeURIComponent(fileId)}/preview` +
+    `?width=${width}&height=0&quality=${quality}&output=webp` +
+    `&project=${encodeURIComponent(APPWRITE_PROJECT_ID)}`
+  );
+}
+
 export const client = new Client();
 
 if (APPWRITE_ENDPOINT) client.setEndpoint(APPWRITE_ENDPOINT);

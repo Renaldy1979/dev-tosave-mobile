@@ -1,16 +1,15 @@
 import {
   tablesDb,
   functions,
-  storage,
   APPWRITE_DATABASE_ID,
   APPWRITE_FUNCTION_COLLECTION,
-  APPWRITE_BUCKET_IMAGES,
+  previewUrl,
   withServiceError,
   isNotFound,
   Query,
 } from "./_appwrite";
 import type { Models } from "react-native-appwrite";
-import { ExecutionMethod, ImageFormat } from "react-native-appwrite";
+import { ExecutionMethod } from "react-native-appwrite";
 import { getCurrentSession } from "./_session";
 import type {
   CollectionItem,
@@ -38,7 +37,6 @@ const TABLE = {
   userStats: "user_stats",
 } as const;
 
-const Webp: ImageFormat = "webp" as ImageFormat;
 
 /* ================================================================== */
 /*                          TIPOS DO APPWRITE                            */
@@ -114,42 +112,10 @@ function rowToCar(row: CollectionItemRow): {
     year: row.carYear,
     scale: row.carScale,
     imagemFull: row.carImageFileId
-      ? storage
-          .getFilePreviewURL(
-              APPWRITE_BUCKET_IMAGES,
-              row.carImageFileId,
-              1080,
-              0,
-              undefined,
-              85,
-              undefined,
-              undefined,
-              undefined,
-              undefined,
-              undefined,
-              undefined,
-              Webp
-            )
-          .toString()
+      ? previewUrl(row.carImageFileId, 1080, 85)
       : null,
     imagemThumb: row.carImageFileId
-      ? storage
-          .getFilePreviewURL(
-              APPWRITE_BUCKET_IMAGES,
-              row.carImageFileId,
-              400,
-              0,
-              undefined,
-              75,
-              undefined,
-              undefined,
-              undefined,
-              undefined,
-              undefined,
-              undefined,
-              Webp
-            )
-          .toString()
+      ? previewUrl(row.carImageFileId, 400, 75)
       : null,
     seriePosition: row.carSeriePosition ?? null,
   };

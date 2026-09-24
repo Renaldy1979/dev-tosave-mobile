@@ -1,14 +1,12 @@
 import {
   tablesDb,
-  storage,
   APPWRITE_DATABASE_ID,
-  APPWRITE_BUCKET_IMAGES,
+  previewUrl,
   APPWRITE_FUNCTION_COLLECTION,
   withServiceError,
   Query,
 } from "./_appwrite";
 import type { Models } from "react-native-appwrite";
-import { ImageFormat } from "react-native-appwrite";
 import { withServiceError as withServiceErr } from "./_appwrite";
 import type {
   Attribute,
@@ -20,13 +18,12 @@ import type {
   Serie,
 } from "@/types";
 
-const Webp: ImageFormat = "webp" as ImageFormat;
 
 /**
  * Catálogo — fase 2, Appwrite TablesDB.
  *
  * Tabelas: `cars`, `brands`, `series`, `attributes`, `catalog_meta`.
- * Imagens via `storage.getFilePreviewURL` (bucket `car-images`).
+ * Imagens via `previewUrl` (bucket `car-images`).
  *
  * Paginação por cursor (sem `offset`). `total` só na 1ª página;
  * o Appwrite para em 5.000, então para o catálogo sem filtro usamos
@@ -134,23 +131,7 @@ function carRowToCar(row: CarRow): Car {
 }
 
 function imageUrl(fileId: string, width: number, quality: number): string {
-  return storage
-    .getFilePreviewURL(
-      APPWRITE_BUCKET_IMAGES,
-      fileId,
-      width,
-      0, // sem recorte
-      undefined,
-      quality,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      Webp
-    )
-    .toString();
+  return previewUrl(fileId, width, quality);
 }
 
 function brandRowToBrand(row: BrandRow): Brand {

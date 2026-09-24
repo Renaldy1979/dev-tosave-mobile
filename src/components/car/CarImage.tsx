@@ -1,8 +1,14 @@
 import { useState } from "react";
 import { View, type DimensionValue } from "react-native";
 import { Image, type ImageContentFit } from "expo-image";
+import { cssInterop } from "nativewind";
 import { useTheme } from "@/theme/ThemeProvider";
 import { cn } from "@/utils/cn";
+
+// O NativeWind só converte `className` dos componentes do React Native.
+// Sem isto, o `className` do `Image` do expo-image é ignorado: a imagem
+// fica sem largura/altura e não aparece (era o caso do CarCard).
+cssInterop(Image, { className: "style" });
 
 /**
  * Imagem de miniatura com placeholder padrão.
@@ -64,7 +70,13 @@ export function CarImage({
       recyclingKey={uri}
       contentFit={contentFit}
       transition={transition}
-      onError={() => setFailedUri(uri)}
+      onError={(event) => {
+        if (__DEV__) {
+          // eslint-disable-next-line no-console
+          console.warn("[images] falha ao carregar", uri, event.error);
+        }
+        setFailedUri(uri);
+      }}
       accessibilityLabel={accessibilityLabel}
       className={cn("bg-surface-2", className)}
       style={style}
