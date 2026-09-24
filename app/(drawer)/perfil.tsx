@@ -9,7 +9,18 @@ import {
 import {
   useRouter,
 } from "expo-router";
-import { Lock, LogOut, Moon, RotateCcw, Smartphone, Sun, Trash2 } from "lucide-react-native";
+import {
+  FileText,
+  Info,
+  Lock,
+  LogOut,
+  Moon,
+  RotateCcw,
+  ShieldCheck,
+  Smartphone,
+  Sun,
+  Trash2,
+} from "lucide-react-native";
 import * as Haptics from "expo-haptics";
 import Constants from "expo-constants";
 import Animated from "react-native-reanimated";
@@ -33,6 +44,8 @@ import { Input } from "@/components/ui/Input";
 import { StatTile, StatTileSkeleton } from "@/components/ui/StatTile";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { ListRow } from "@/components/ui/ListRow";
+import { useAppConfig } from "@/hooks/useAppConfig";
+import { openExternal } from "@/utils/openExternal";
 import { Logo } from "@/components/ui/Logo";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { SignOutDialog } from "@/components/navigation/SignOutDialog";
@@ -61,6 +74,14 @@ export default function Perfil() {
   const { scheme, preference, setPreference } = useTheme();
   const { user, refresh } = useCurrentUser();
   const { show } = useToast();
+
+  const appConfig = useAppConfig();
+  const openLegal = useCallback(
+    async (url: string) => {
+      if (!(await openExternal(url))) show({ type: "danger", message: "Não foi possível abrir o link." });
+    },
+    [show]
+  );
 
   const [summary, setSummary] = useState<CollectionSummary | null>(null);
   const [summaryState, setSummaryState] = useState<"loading" | "ok" | "error">("loading");
@@ -278,6 +299,28 @@ export default function Perfil() {
               accessibilityHint="Encerra a sessão neste aparelho"
             />
           </View>
+          {/* Sobre: links da config remota (item com URL vazia não aparece). */}
+          <Text variant="eyebrow" tone="subtle" className="mt-8 mb-2">
+            SOBRE
+          </Text>
+          <View className="rounded-lg bg-surface border border-border overflow-hidden">
+            {appConfig.termsUrl ? (
+              <ListRow
+                icon={FileText}
+                label="Termos de Uso"
+                onPress={() => openLegal(appConfig.termsUrl)}
+              />
+            ) : null}
+            {appConfig.privacyUrl ? (
+              <ListRow
+                icon={ShieldCheck}
+                label="Política de Privacidade"
+                onPress={() => openLegal(appConfig.privacyUrl)}
+              />
+            ) : null}
+            <ListRow icon={Info} label="Versão" value={versionLabel} />
+          </View>
+
           {/* Zona de perigo: grupo próprio, abaixo de Sair (§5.1). */}
           <View className="rounded-lg bg-surface border border-border overflow-hidden mt-6">
             <ListRow
@@ -293,9 +336,6 @@ export default function Perfil() {
         {/* Logo + Versão */}
         <View className="items-center mt-10">
           <Logo variant="auto" size="md" className="opacity-60" />
-          <Text variant="caption" tone="subtle" className="mt-2">
-            {versionLabel}
-          </Text>
         </View>
       </Animated.ScrollView>
 

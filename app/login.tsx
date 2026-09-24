@@ -14,6 +14,7 @@ import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/theme/ThemeProvider";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useAppConfig } from "@/hooks/useAppConfig";
 import type { SignInError } from "@/services/auth";
 import { LogoCar } from "@/components/ui/Logo";
 import { ScreenContainer } from "@/components/ui/ScreenContainer";
@@ -22,6 +23,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Logo } from "@/components/ui/Logo";
 import { useToast } from "@/components/ui/Toast";
+import { LegalLinks } from "@/components/ui/LegalLinks";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -43,6 +45,7 @@ const SIGN_IN_ERROR: Record<SignInError, string> = {
  * - `reason=expired` → banner "Sua sessão expirou. Entre novamente."
  * - `reason=created` → banner "Conta criada. Entre para continuar."
  * - `reason=deleted` → banner "Sua conta foi excluída."
+ * - `reason=password-reset` → banner "Senha alterada. Entre com a nova senha."
  * - `reason=blocked` → banner de erro "Esta conta está desativada."
  *   (conta bloqueada pelo admin com o app aberto).
  *
@@ -55,6 +58,8 @@ export default function Login() {
   const insets = useSafeAreaInsets();
   const { user, signIn } = useCurrentUser();
   const { show } = useToast();
+  // "Esqueci minha senha" só existe com a URL de retorno configurada.
+  const { passwordRecoveryUrl } = useAppConfig();
 
   // Com sessão (deep link, ou sessão restaurada), vai para o app.
   useEffect(() => {
@@ -70,7 +75,9 @@ export default function Login() {
         ? "Conta criada. Entre para continuar."
         : params.reason === "deleted"
           ? "Sua conta foi excluída."
-          : null;
+          : params.reason === "password-reset"
+            ? "Senha alterada. Entre com a nova senha."
+            : null;
 
   const [email, setEmail] = useState(params.email ?? "");
   const [password, setPassword] = useState("");
@@ -261,6 +268,23 @@ export default function Login() {
               autoFocus={Boolean(params.email)}
               ref={passwordRef}
             />
+            {passwordRecoveryUrl ? (
+              <View className="items-end -mt-2">
+                <Pressable
+                  accessibilityRole="link"
+                  accessibilityLabel="Esqueci minha senha"
+                  onPress={() => router.push("/recuperar-senha")}
+                  disabled={submitting}
+                  hitSlop={8}
+                  className="active:opacity-70 justify-center"
+                  style={{ minHeight: 44 }}
+                >
+                  <Text variant="body-sm" tone="primary">
+                    Esqueci minha senha
+                  </Text>
+                </Pressable>
+              </View>
+            ) : null}
           </View>
 
           {/* banner de erro */}
@@ -308,6 +332,9 @@ export default function Login() {
               </Text>
             </Pressable>
           </View>
+
+          {/* Rodapé: Termos · Privacidade (config remota; some sem URLs). */}
+          <LegalLinks variant="footer" tone="ink" className="mt-6" />
         </ScrollView>
       </KeyboardAvoidingView>
     </ScreenContainer>

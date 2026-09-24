@@ -170,6 +170,68 @@ export async function changePassword(
   }
 }
 
+/** Erros possíveis de `requestPasswordRecovery`. */
+export type RecoveryRequestError = "rate_limited" | "network" | "unknown";
+
+/**
+ * Pede o e-mail de recuperação (`02-login.md` §7): `account.createRecovery`
+ * com a URL de retorno da config remota (`passwordRecoveryUrl`). E-mail
+ * inexistente (404) conta como enviado: a resposta é sempre a mesma e
+ * não revela quais e-mails têm conta.
+ */
+export async function requestPasswordRecovery(
+  email: string,
+  url: string
+): Promise<{ ok: true } | { ok: false; error: RecoveryRequestError }> {
+  try {
+    await authCall(() => account.createRecovery({ email: email.trim().toLowerCase(), url }));
+    return { ok: true };
+  } catch (err) {
+    if (isNetwork(err)) return { ok: false, error: "network" };
+    if (isRateLimited(err)) return { ok: false, error: "rate_limited" };
+    const { status, type } = appwriteErrorInfo(err);
+    if (status === 404 || type === "user_not_found") return { ok: true };
+    return { ok: false, error: "unknown" };
+  }
+}
+
+/** Erros possíveis de `completePasswordRecovery`. */
+export type RecoveryCompleteError =
+  | "expired"
+  | "weak_password"
+  | "common_password"
+  | "rate_limited"
+  | "network"
+  | "unknown";
+
+/**
+ * Define a nova senha a partir do link (`userId` + `secret`):
+ * `account.updateRecovery`. Link inválido ou expirado (401
+ * `user_invalid_token`) e usuário inexistente (404) → `expired`.
+ * Não abre sessão: a tela manda para o Login.
+ */
+export async function completePasswordRecovery(
+  userId: string,
+  secret: string,
+  password: string
+): Promise<{ ok: true } | { ok: false; error: RecoveryCompleteError }> {
+  try {
+    await authCall(() => account.updateRecovery({ userId, secret, password }));
+    return { ok: true };
+  } catch (err) {
+    if (isNetwork(err)) return { ok: false, error: "network" };
+    if (isRateLimited(err)) return { ok: false, error: "rate_limited" };
+    const { status, type } = appwriteErrorInfo(err);
+    if (status === 401 || status === 404 || type === "user_invalid_token") {
+      return { ok: false, error: "expired" };
+    }
+    if (type === "general_argument_invalid") {
+      return { ok: false, error: password.length >= 8 ? "common_password" : "weak_password" };
+    }
+    return { ok: false, error: "unknown" };
+  }
+}
+
 /** Erros possíveis de `deleteAccount`. */
 export type DeleteAccountError = "wrong_password" | "rate_limited" | "network" | "unknown";
 

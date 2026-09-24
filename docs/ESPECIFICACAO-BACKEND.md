@@ -388,6 +388,55 @@ interface YearProgressRow { year: number; owned: number; carCount: number; pct: 
   - `Super T-Hunt` = `70c4020e-3824-4b33-b44e-08b20903f515`.
 - As grids de `cars` já trazem `attributeIds`, porque não usam `Query.select`.
 
+### Configuração remota e "Esqueci minha senha" (24/09/2026)
+
+**`app_config`: tabela com UMA linha, `$id = "public"`.**
+
+- Colunas, todas string e **vazias** até o usuário mandar os valores: `termsUrl`, `privacyUrl`, `supportEmail`, `passwordRecoveryUrl`, `minAppVersion` (semver; vazio = sem bloqueio).
+- **Leitura `any`**, sem login: o Cadastro e o "Esqueci minha senha" leem antes da sessão. **Escrita:** só `team:admins` (futuro portal) e o servidor.
+- Validado: visitante lê (200) e não escreve (401).
+- **`getAppConfig()`** → `{ termsUrl, privacyUrl, supportEmail, passwordRecoveryUrl, minAppVersion }`:
+  - faz `tablesDb.getRow({ tableId: "app_config", rowId: "public" })`;
+  - campo vazio = recurso escondido na UI;
+  - 404 ou falha de rede → todos vazios (cache do último valor opcional).
+
+**Esqueci minha senha (B1)**
+
+- **Pedido:** `requestPasswordRecovery(email)` chama `account.createRecovery({ email, url: appConfig.passwordRecoveryUrl })`.
+- **Nova senha:** `completePasswordRecovery(userId, secret, password)` chama `account.updateRecovery({ userId, secret, password })`.
+- **Depende de SMTP:** sem SMTP, o `createRecovery` responde **503 `general_smtp_disabled`** (testado; hoje o SMTP está desligado). O `updateRecovery` não depende de SMTP, mas só existe link depois do e-mail.
+
+**URL de retorno (testado no 1.8.1).** O Appwrite valida o hostname da URL contra as plataformas cadastradas:
+
+| URL | Resultado |
+|---|---|
+| `tosave://recuperar-senha` | **recusada** (400: "Register your new client (recuperar-senha)"). Scheme próprio não passa, nem com hostname de plataforma |
+| `appwrite-callback-6aa1d3ab0039a9a9a8c4://recuperar-senha` | **aceita**. É o scheme reservado do Appwrite para apps nativos |
+| `exp://…` (Expo Go) | aceita |
+| host do próprio Appwrite, `localhost` | aceitos |
+| domínio web próprio (ex.: `https://tosave.app/...`) | **exige plataforma Web** cadastrada com esse hostname (400 sem ela) |
+
+**Opções:**
+
+1. **(Recomendada) Deep link direto:** `passwordRecoveryUrl = appwrite-callback-6aa1d3ab0039a9a9a8c4://recuperar-senha`, com o app registrando esse scheme no `app.json` (`scheme: ["tosave", "appwrite-callback-6aa1d3ab0039a9a9a8c4"]`).
+   - O link do e-mail abre o app com `?userId=&secret=&expire=`.
+   - Funciona em build de desenvolvimento e de produção; **não funciona no Expo Go**. Para testar no Expo Go, use temporariamente o `exp://…/--/recuperar-senha` do Metro.
+2. **Página web intermediária:**
+   - fica numa plataforma Web cadastrada (portal futuro, ou uma página estática num Site do Appwrite);
+   - recebe `userId`/`secret`, tenta abrir o deep link e, se o app não estiver instalado, mostra um formulário web de nova senha;
+   - é mais robusta (abre em qualquer dispositivo), mas depende do domínio e do portal.
+
+**Erros:**
+
+| Chamada | Resposta | Significado |
+|---|---|---|
+| `createRecovery` | 400 `general_argument_invalid` | e-mail ou URL inválidos |
+| `createRecovery` | 503 `general_smtp_disabled` | sem SMTP |
+| `createRecovery` | 429 | muitas tentativas |
+| `updateRecovery` | **401 `user_invalid_token`** | link inválido **ou expirado** |
+| `updateRecovery` | **400 `general_argument_invalid`** | senha fraca (8 a 265 caracteres e fora do dicionário) |
+| `updateRecovery` | 404 `user_not_found` | `userId` inexistente |
+
 ## 10. Plano de migração (origem somente leitura)
 
 ### Acesso

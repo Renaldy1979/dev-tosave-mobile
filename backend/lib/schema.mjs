@@ -216,6 +216,29 @@ export const TABLES = [
     ],
   },
   {
+    // Configuração remota do app. Leitura PÚBLICA (links do Cadastro aparecem
+    // antes do login); escrita só do time admins (futuro portal) e do servidor.
+    // Uma linha só: $id = "public". Valores iniciais vazios.
+    id: "app_config",
+    name: "App config",
+    permissions: [
+      Permission.read(Role.any()),
+      Permission.create(Role.team(ADMINS_TEAM_ID)),
+      Permission.update(Role.team(ADMINS_TEAM_ID)),
+      Permission.delete(Role.team(ADMINS_TEAM_ID)),
+    ],
+    rowSecurity: false,
+    columns: [
+      str("termsUrl", 500, { xdefault: "" }),
+      str("privacyUrl", 500, { xdefault: "" }),
+      str("supportEmail", 254, { xdefault: "" }),
+      str("passwordRecoveryUrl", 500, { xdefault: "" }),
+      // Versão mínima do app (semver "1.2.0"); vazio = sem bloqueio.
+      str("minAppVersion", 20, { xdefault: "" }),
+    ],
+    indexes: [],
+  },
+  {
     // Tentativas por usuário para ações sensíveis (ex.: excluir conta).
     // $id = "<ação>_" + sha256(userId)[0:32]. Só o servidor lê e escreve.
     id: "rate_limits",

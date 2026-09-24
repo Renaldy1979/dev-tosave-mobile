@@ -18,6 +18,7 @@ import { useToast } from "@/components/ui/Toast";
 import { ScreenContainer } from "@/components/ui/ScreenContainer";
 import { Text } from "@/components/ui/Text";
 import { Button } from "@/components/ui/Button";
+import { LegalLinks } from "@/components/ui/LegalLinks";
 import { Input } from "@/components/ui/Input";
 import { IconButton } from "@/components/ui/IconButton";
 import { Logo } from "@/components/ui/Logo";
@@ -400,6 +401,9 @@ export default function Cadastro() {
             onPress={handleSubmit}
             className="mt-6"
           />
+
+          {/* Consentimento com links da config remota (some sem URLs). */}
+          <LegalLinks variant="consent" tone="ink" className="mt-4" />
 
           {/* "Já tem conta? Entrar" */}
           <View className="mt-6 items-center">

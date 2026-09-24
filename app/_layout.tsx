@@ -24,6 +24,7 @@ import { ThemeProvider } from "@/theme/ThemeProvider";
 import { ToastProvider } from "@/components/ui/Toast";
 import { CollectionProvider } from "@/hooks/useCollectionStore";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { loadAppConfig } from "@/hooks/useAppConfig";
 
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
@@ -45,6 +46,11 @@ export default function RootLayout() {
     if (fontsLoaded) SplashScreen.hideAsync().catch(() => undefined);
   }, [fontsLoaded]);
 
+  // Config remota (links de Termos, Privacidade, recuperação de senha).
+  useEffect(() => {
+    loadAppConfig();
+  }, []);
+
   if (!fontsLoaded) return null;
 
   return (
@@ -62,6 +68,7 @@ export default function RootLayout() {
                       (sempre entra por `replace`; sem gesto de voltar). */}
                   <Stack.Screen name="login" options={{ animation: "fade", gestureEnabled: false }} />
                   <Stack.Screen name="cadastro" />
+                  <Stack.Screen name="recuperar-senha" />
                   <Stack.Screen name="(drawer)" />
                   <Stack.Screen
                     name="car/[id]"

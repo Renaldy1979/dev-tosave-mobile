@@ -2,7 +2,10 @@
   "expo": {
     "name": "ToSave",
     "slug": "tosave",
-    "scheme": "tosave",
+    "scheme": [
+      "tosave",
+      "appwrite-callback-6aa1d3ab0039a9a9a8c4"
+    ],
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
@@ -11,15 +14,19 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "LSApplicationQueriesSchemes": ["whatsapp"]
-      }
+        "LSApplicationQueriesSchemes": [
+          "whatsapp"
+        ]
+      },
+      "bundleIdentifier": "cloud.tosave.app"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#0B0B0D"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "package": "cloud.tosave.app"
     },
     "web": {
       "bundler": "metro",
@@ -30,15 +37,28 @@
       "appwriteEndpoint": "https://tosave-appwrite.8m5sgi.easypanel.host/v1",
       "appwriteProjectId": "6aa1d3ab0039a9a9a8c4",
       "appwriteDatabaseId": "tosave",
-      "appwriteBucketImages": "car-images"
+      "appwriteBucketImages": "car-images",
+      "router": {},
+      "eas": {
+        "projectId": "84167a3f-e935-4993-8686-3f6de06cfd58"
+      }
     },
     "plugins": [
       "expo-router",
-      ["expo-splash-screen", { "image": "./assets/brand/logo.png", "imageWidth": 220, "resizeMode": "contain", "backgroundColor": "#0B0B0D" }],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/brand/logo.png",
+          "imageWidth": 220,
+          "resizeMode": "contain",
+          "backgroundColor": "#0B0B0D"
+        }
+      ],
       "expo-font"
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "owner": "renaldy"
   }
 }

@@ -5,12 +5,12 @@
  * `series.picture` da origem (Postgres, somente leitura). Sem
  * normalização e sem candidatos aproximados: quem não casa fica sem imagem.
  *
- * Depois grava `series.imageFileId` e deixa em destaque (isDefault=true)
- * SOMENTE as séries com foto; as demais ficam isDefault=false.
+ * Depois grava `series.imageFileId`. Os destaques (isDefault) só mudam com
+ * --set-featured: aí ficam em destaque SOMENTE as séries com foto.
  * A lista de destaques anterior fica em .state/series-destaques-antes.json
  * (não é sobrescrita se já existir) para poder desfazer.
  *
- *   npm run series-images -- --dir="C:\...\base_series" [--dry-run]
+ *   npm run series-images -- --dir="C:\...\base_series" [--dry-run] [--set-featured]
  */
 import { existsSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -28,6 +28,7 @@ const args = Object.fromEntries(process.argv.slice(2).map((a) => {
 }));
 const dir = args.dir;
 const dryRun = Boolean(args["dry-run"]);
+const setFeatured = Boolean(args["set-featured"]);
 if (!dir || !existsSync(dir)) {
   console.error("Informe --dir=<pasta das imagens das séries>");
   process.exit(1);
@@ -70,9 +71,10 @@ console.log(`Séries com picture sem arquivo (${seriesWithoutFile.length}): ${se
 const series = (await tablesDB.listRows({ databaseId: DATABASE_ID, tableId: "series", queries: [Query.limit(1000)] })).rows;
 const withPhoto = new Set(matched.map((m) => m.id));
 const before = series.filter((s) => s.isDefault).map((s) => s.title).sort();
-const after = series.filter((s) => withPhoto.has(s.$id)).map((s) => s.title).sort();
+const after = setFeatured ? series.filter((s) => withPhoto.has(s.$id)).map((s) => s.title).sort() : before;
 console.log(`\nDestaques antes (${before.length}): ${before.join(", ")}`);
-console.log(`Destaques depois (${after.length}): ${after.join(", ")}`);
+console.log(`Destaques depois (${after.length})${setFeatured ? "" : " — inalterados (sem --set-featured)"}: ${after.join(", ")}`);
+console.log(`Séries com logo depois: ${new Set([...series.filter((s) => s.imageFileId).map((s) => s.$id), ...withPhoto]).size} de ${series.length}`);
 
 const snapshotPath = path.join(root, ".state", "series-destaques-antes.json");
 if (!existsSync(snapshotPath)) {
@@ -105,7 +107,7 @@ try {
   for (const s of series) {
     const data = {
       imageFileId: withPhoto.has(s.$id) ? seriesFileId(s.$id) : (s.imageFileId ?? null),
-      isDefault: withPhoto.has(s.$id),
+      isDefault: setFeatured ? withPhoto.has(s.$id) : s.isDefault,
     };
     if (data.imageFileId !== (s.imageFileId ?? null) || data.isDefault !== s.isDefault) {
       await tablesDB.updateRow({ databaseId: DATABASE_ID, tableId: "series", rowId: s.$id, data });

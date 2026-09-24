@@ -55,9 +55,11 @@ export type { CollectionListFilters } from "./collection";
 
 export {
   changePassword,
+  completePasswordRecovery,
   deleteAccount,
   getCurrentUser,
   getSession,
+  requestPasswordRecovery,
   signIn,
   signOut,
   signUp,
@@ -66,6 +68,8 @@ export type {
   ChangePasswordError,
   ChangePasswordResult,
   DeleteAccountError,
+  RecoveryCompleteError,
+  RecoveryRequestError,
   DeleteAccountResult,
   SignInError,
   SignInResult,
