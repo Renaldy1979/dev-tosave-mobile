@@ -2,6 +2,15 @@
 
 Itens das specs de tela e das revisões de design que **não bloqueiam** a fase 1. O critério está em `docs/ESPECIFICACAO-MOBILE.md`, em "Critério de pronto da fase 1". Nada aqui entra antes da fase 1 estar entregue.
 
+## Do teste do usuário na fase 2 (23/09/2026)
+
+- **Controle de quantidade (− / +):** sai dos cards da Coleção e fica só no Detalhe do carro, quando o carro já está na coleção do usuário.
+- **Imagens do app antigo para reaproveitar** (repositório `Renaldy1979/TOSAVE-MOBILE`, clonado para consulta em `C:/Dev/referencia/TOSAVE-MOBILE/src/assets/images/`):
+  - `avatar.png`: imagem padrão do usuário sem foto (Perfil / avatar).
+  - `thunt.png` e `sthunt.png`: logos dos atributos **Treasure Hunt** e **Super Treasure Hunt**, para usar nos badges de atributo.
+  - Ícone do **WhatsApp** para o botão Compartilhar: o usuário diz que está lá, mas a pasta só tem `avatar`, `logo`, `sthunt` e `thunt`. Confirmar com ele onde está.
+- **Desempenho no iOS:** a navegação pareceu lenta no Expo Go. Avaliar num build de desenvolvimento ou de produção (o Expo Go roda em modo dev, sem otimizações) antes de otimizar.
+
 ## Da revisão do lote 01 (`revisao-design-lote-01.md`)
 
 Pendências que o Forja registrou como evolução em `lote-02-revisao-design.md`:
