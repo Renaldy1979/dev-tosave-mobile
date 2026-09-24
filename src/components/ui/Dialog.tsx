@@ -76,6 +76,9 @@ export function Dialog({
     return () => sub.remove();
   }, [open, dismissable, onClose]);
 
+  const sideBySide = actions.length === 2;
+  const orderedActions = sideBySide ? [actions[1], actions[0]] : actions;
+
   const backdropStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
   const panelStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,
@@ -99,7 +102,7 @@ export function Dialog({
     >
       <ThemeScope scheme={scheme}>
         <View
-          style={{ paddingTop: insets.top, paddingBottom: insets.bottom }}
+          style={{ paddingTop: insets.top, paddingBottom: insets.bottom, paddingHorizontal: 24 }}
           className="flex-1 items-center justify-center bg-overlay/70"
         >
           <Animated.View style={[backdropStyle, { position: "absolute", inset: 0 }]} pointerEvents="none" />
@@ -111,8 +114,8 @@ export function Dialog({
             style={{ position: "absolute", inset: 0 }}
           />
           <Animated.View
-            style={panelStyle}
-            className="mx-6 w-full max-w-[400px] rounded-xl bg-surface border border-border p-5"
+            style={[panelStyle, { width: "100%", maxWidth: 400 }]}
+            className="rounded-xl bg-surface border border-border p-5"
           >
             {Icon ? (
               <View
@@ -130,18 +133,33 @@ export function Dialog({
                 {description}
               </Text>
             ) : null}
-            <View className="gap-2 mt-5">
-              {actions.map((action, idx) => (
-                <Button
+            {/* Ações com geometria explícita (sem depender de `gap` via
+                className): 2 ações lado a lado — a secundária à esquerda,
+                a principal à direita —; 3 ou mais, empilhadas. Cada botão
+                tem no mínimo 44 pt e 12 pt de espaço, sem área de toque
+                sobreposta. */}
+            <View
+              style={{
+                marginTop: 20,
+                flexDirection: sideBySide ? "row" : "column",
+                gap: 12,
+              }}
+            >
+              {orderedActions.map((action, idx) => (
+                <View
                   key={`${action.label}-${idx}`}
-                  label={action.label}
-                  variant={action.variant ?? "primary"}
-                  size="md"
-                  fullWidth
-                  loading={action.loading}
-                  disabled={action.disabled}
-                  onPress={action.onPress}
-                />
+                  style={sideBySide ? { flex: 1 } : undefined}
+                >
+                  <Button
+                    label={action.label}
+                    variant={action.variant ?? "primary"}
+                    size="md"
+                    fullWidth
+                    loading={action.loading}
+                    disabled={action.disabled}
+                    onPress={action.onPress}
+                  />
+                </View>
               ))}
             </View>
           </Animated.View>

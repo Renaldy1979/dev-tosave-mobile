@@ -29,10 +29,14 @@ export function StatTile({ value, label, onPress, accessibilityLabel, className 
       onPress={onPress}
       className={`items-center justify-center flex-1 ${onPress ? "active:opacity-80" : ""} ${className ?? ""}`}
     >
+      {/* A Saira Black itálica sobe acima do fontSize: com
+          `leading-none` o iOS cortava o topo do número. A linha de 56 px
+          cobre o display-xl (40 px) até a escala máxima de 1.2×; o `px-1`
+          evita cortar a inclinação do itálico. */}
       <Text
         variant="display-xl"
         tone="accent"
-        className="font-display-black leading-none"
+        className="font-display-black leading-[56px] px-1"
       >
         {value}
       </Text>
