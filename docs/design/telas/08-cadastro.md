@@ -4,7 +4,7 @@
 |---|---|
 | Rota | `app/cadastro.tsx` → `/cadastro`, tela de stack **normal**, sem modal. Aberta a partir do Login. |
 | Params | nenhum |
-| Acesso | público; **com sessão ativa, redireciona para `/(tabs)`** sem renderizar o formulário |
+| Acesso | público; **com sessão ativa, redireciona para `/(drawer)`** sem renderizar o formulário |
 | Tema | **sempre ink** (`ThemeScope dark`), status bar `light`, nos dois temas |
 | Dados | Appwrite Auth: `account.create(ID.unique(), email, password, name)` seguido de `account.createEmailPasswordSession(email, password)` |
 | Fase | **2** |
@@ -105,11 +105,11 @@ A validação no app acontece ao sair do campo e ao enviar. O erro de campo só 
 |---|---|
 | **Inicial** | Campos vazios, foco em Nome. |
 | **Enviando** | Botão em `loading` ("Criar conta" + spinner). Campos com `editable={false}`. Voltar, link "Entrar" e back do Android ficam desativados até a resposta. |
-| **Sucesso** | Conta criada **e** sessão aberta: `router.replace("/(tabs)")` (o voltar nunca retorna ao cadastro) + Toast success "Conta criada. Bem-vindo, {primeiro nome}." |
+| **Sucesso** | Conta criada **e** sessão aberta: `router.replace("/(drawer)")` (o voltar nunca retorna ao cadastro) + Toast success "Conta criada. Bem-vindo, {primeiro nome}." |
 | **Conta criada, mas a sessão falhou** | `router.replace({ pathname: "/login", params: { email } })` com o banner **informativo** (borda `info`, não `flame`): "Conta criada. Entre para continuar." |
 | **Erro de campo** (validação ou servidor, §3–§4) | Erro abaixo do campo, borda `danger`, foco no campo. A senha **não** é apagada. |
 | **Erro geral** (§4) | Banner acima do botão; os campos mantêm os valores digitados. |
-| **Aberta já com sessão** | Redireciona para `/(tabs)` antes de renderizar. |
+| **Aberta já com sessão** | Redireciona para `/(drawer)` antes de renderizar. |
 
 Sem empty state (a tela não tem lista).
 
@@ -119,7 +119,7 @@ Sem empty state (a tela não tem lista).
 |---|---|
 | "Já tem conta? Entrar" / botão voltar / back do Android | `router.back()`. Se não houver histórico, `router.replace("/login")`. |
 | "Entrar com este e-mail" | `router.replace({ pathname: "/login", params: { email } })` |
-| Sucesso | `router.replace("/(tabs)")` |
+| Sucesso | `router.replace("/(drawer)")` |
 
 ## 7. Acessibilidade
 - O título usa `accessibilityRole="header"`.

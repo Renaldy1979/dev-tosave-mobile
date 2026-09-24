@@ -195,6 +195,34 @@ Tamanhos: `sm` (h-5, texto 11) e `md` (h-6). Opcional `icon` (14) ou `dot` (6 pt
 **ColorBadge** (cor do carro): dot 10 pt com o hex (borda `border-strong` hairline) + nome. Se `color` não for hex válido, mostra ícone `Palette` + texto.
 Badges não são interativos (`accessible` agrupado com o pai).
 
+### 5.1 Ícones de Treasure Hunt e Super Treasure Hunt
+
+Dois atributos têm ícone próprio, herdado do app antigo (`thunt.png` 50×50 e `sthunt.png` 50×40, PNG com transparência):
+
+| Atributo | Asset (origem: `TOSAVE-MOBILE/src/assets/images/`) | Destino no app |
+|---|---|---|
+| **T-Hunt** (Treasure Hunt), id `64358b3b-5765-4e2c-b27c-d23f67c77e55` | `thunt.png` (círculo cinza) | `assets/attributes/thunt.png` |
+| **Super T-Hunt** (Super Treasure Hunt), id `70c4020e-3824-4b33-b44e-08b20903f515` | `sthunt.png` (círculo dourado) | `assets/attributes/sthunt.png` |
+
+Ids estáveis (uuid da origem; não mudam em nova migração), confirmados pelo Alicerce em 24/09/2026. Títulos exatos no catálogo: "T-Hunt" e "Super T-Hunt". Os cards de Home, Busca e Série recebem `attributeIds`; os da Coleção, `carAttributeIds`.
+
+- **Como reconhecer o atributo:** pelo **id**, num mapa único id → ícone (ex.: `src/config/attributeIcons.ts`) com os dois ids acima. Não comparar títulos: com os ids estáveis, o fallback por título não é mais necessário.
+- **Qualidade:** os PNGs são pequenos. Usar no máximo 20 pt (a 3× ficam ~60 px, levemente suavizados, aceitável). **Pedir ao usuário uma versão maior ou vetorial** antes de publicar na loja.
+- `expo-image` com `contentFit="contain"`, `accessible={false}` (o texto do atributo ou a label do card já informa).
+
+**No Detalhe (seção Atributos, `telas/05-car-detalhe.md`):**
+- O Badge do atributo usa o ícone no lugar de `Sparkles`, com 16 pt.
+- T-Hunt: Badge `neutral`. Super T-Hunt: Badge **`accent`** (dourado, combina com o ícone e com o valor do achado).
+- Texto: o título do atributo como vem do catálogo ("T-Hunt", "Super T-Hunt").
+- O Badge continua tocável (→ Busca por atributo), com área de toque de 44 pt (`hitSlop`).
+
+**No CarCard `grid` e `collection`:**
+- Ícone de **20 pt** no **canto inferior esquerdo da imagem**, a 8 pt das bordas, sobre um círculo `bg-black/45` de 24 pt (legível sobre qualquer foto).
+- Um carro com os dois atributos mostra **só o Super T-Hunt**.
+- Não interativo. A label de acessibilidade do card ganha ", Treasure Hunt" ou ", Super Treasure Hunt" (por extenso: "T-Hunt" é mal lido pelo leitor de tela).
+- No CarCard `row`: ícone de 16 pt antes do código `toy`.
+- Os outros atributos **não** aparecem no card (só no Detalhe).
+
 ---
 
 ## 6. TabBar
@@ -481,7 +509,7 @@ Necessários às telas da fase 1.
 | C.1 | **Text** | `variant` = token de tipografia (DS §5.2) + `tone` (`fg`, `muted`, `subtle`, `primary`, `accent`, `flame`, `danger`, `ink`). Aplica família, cor e `maxFontSizeMultiplier`. |
 | C.2 | **QuantityStepper** | `− n +` com `font-mono body`, botões 32 visuais (toque 44, 8 pt entre eles). Variantes `glass` (sobre imagem, compacto h-8) e `secondary` (detalhe, h-11, número 40 pt de largura). Mín. 1 (abaixo disso chama `onRemoveRequest`), máx. 99. `accessibilityRole="adjustable"` com `accessibilityActions increment/decrement`, valor "2 unidades". Haptic `selection`. |
 | C.3 | **Toast** | Host único no root (`ToastProvider`, `useToast().show({ type, message, action? })`). `rounded-lg bg-surface border border-border border-l-4` (success/danger/info) + ícone + texto `body-sm` + ação `primary-text`. Topo, `insets.top + 8`, 4 s. `accessibilityLiveRegion="polite"` / anúncio. |
-| C.4 | **Avatar** | 32/56/88 pt, `rounded-full`, iniciais em `font-display` sobre `bg-primary-soft text-primary-text`. Com borda de 2 pt em gradiente flame no tamanho 88 (Perfil). |
+| C.4 | **Avatar** | 32/56/88 pt, `rounded-full`, iniciais em `font-display` sobre `bg-primary-soft text-primary-text`. Com borda de 2 pt em gradiente flame no tamanho 88 (Perfil). **Sem foto:** iniciais; sem nome, ícone `User`. Não existe imagem de avatar padrão (o `avatar.png` do app antigo é foto de uma pessoa real e não deve ser usado; ver `telas/07-perfil.md` §1). |
 | C.5 | **SegmentedControl** | `flex-row bg-surface-2 rounded-md p-1 h-11`, itens `flex-1`, ativo `bg-surface-3 border border-border` com slide animado do fundo (200 ms). Tema no Perfil (Escuro · Claro · Sistema). `accessibilityRole="radiogroup"`/`radio`. |
 | C.6 | **Logo** | `variant: "auto" \| "dark" \| "light"`, `size: "sm" (96) \| "md" (180) \| "lg" (220)`. `auto` escolhe pelo tema atual; dentro de `ThemeScope dark` é sempre `dark`. `expo-image` com `contentFit="contain"`, `accessibilityLabel="ToSave"`. |
 | C.7 | **SectionHeader** | `flex-row items-end justify-between px-4 mb-3`: título `h2` + subtítulo opcional `body-sm fg-muted`; à direita, link "Ver tudo" `body-sm font-sans-medium text-primary-text` + `ChevronRight` 16 (toque 44). |

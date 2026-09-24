@@ -43,7 +43,7 @@ Tela premium: a miniatura em primeiro plano, informação organizada como ficha 
 │ 🎨 Cor            ● Azul      │  ColorBadge
 │                               │
 │ Atributos                     │  h2
-│ [✦ Real Riders] [✦ Treasure Hunt] │ Badges neutral com Sparkles (tocáveis → Busca por atributo)
+│ [✦ Real Riders] [(TH) Treasure Hunt] │ Badges neutral com Sparkles (tocáveis → Busca por atributo); T-Hunt e Super T-Hunt com ícone próprio (componentes §5.1)
 │                               │
 │ Mais da série        Ver tudo │  SectionHeader
 │ [card][card][card]→           │  faixa horizontal de CarCard grid (largura 150)

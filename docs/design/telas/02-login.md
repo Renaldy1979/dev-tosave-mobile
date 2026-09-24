@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | Rota | `app/login.tsx` → `/login`, tela de stack **normal** (não é mais modal). É a **tela de entrada** do app quando não há sessão. |
-| Params | `email` (opcional: vem preenchido, ex.: a partir do Cadastro) · `reason=expired` (opcional: sessão expirada) |
-| Acesso | público; **com sessão ativa, redireciona para `/(tabs)`** sem renderizar o formulário |
+| Params | `email` (opcional: vem preenchido, ex.: a partir do Cadastro) · `reason=expired` (opcional: sessão expirada) · `reason=deleted` (opcional: conta excluída, `07-perfil.md` §5.1) |
+| Acesso | público; **com sessão ativa, redireciona para `/(drawer)`** sem renderizar o formulário |
 | Tema | **sempre ink** (`ThemeScope dark`), status bar `light`, nos dois temas |
 | Dados | Appwrite Auth: `account.createEmailPasswordSession(email, password)` |
 | Fase | **2** (substitui a versão modal da fase 1) |
@@ -43,11 +43,11 @@ Sem animações extras: o encolhimento animado do topo com teclado vai para a fa
 splash ──► onboarding.seen ausente? ──► Onboarding ──► Login
    │                                                    ▲
    ├── sem sessão ──────────────────────────────────────┘
-   └── com sessão válida ──► /(tabs) (Home)
+   └── com sessão válida ──► /(drawer) (Home)
 ```
 
 - O splash (`01-onboarding-splash.md`) consulta `account.get()`:
-  - sessão válida → `router.replace("/(tabs)")`;
+  - sessão válida → `router.replace("/(drawer)")`;
   - sem sessão → `router.replace("/login")` (ou Onboarding na primeira abertura, que no fim leva ao Login).
 - **Sessão expirada ou revogada** durante o uso (resposta `401` do Appwrite em qualquer tela) → limpa o estado local e faz `router.replace({ pathname: "/login", params: { reason: "expired" } })`.
 - **Sair** (Perfil) → `account.deleteSession("current")` → `router.replace("/login")`. O voltar nunca reabre as tabs.
@@ -113,16 +113,17 @@ Título único, sem variação por contexto:
 |---|---|
 | **Inicial** | Campos vazios (ou e-mail preenchido via param), foco conforme §4. |
 | **Enviando** | Botão em `loading` ("Entrar" + spinner). Campos com `editable={false}`. O link "Criar conta" fica desativado até a resposta. |
-| **Sucesso** | `router.replace("/(tabs)")`. |
+| **Sucesso** | `router.replace("/(drawer)")`. |
 | **Credencial inválida** (`401 user_invalid_credentials`) | Banner de erro: "E-mail ou senha incorretos." A senha é limpa e recebe o foco. |
 | **Conta bloqueada** (`401 user_blocked`) | Banner de erro: "Esta conta está desativada." |
 | **Muitas tentativas** (`429`) | Banner de erro: "Muitas tentativas. Aguarde alguns minutos e tente de novo." |
 | **Sem rede / timeout** | Banner de erro: "Sem conexão. Verifique sua internet e tente novamente." |
 | **Erro inesperado** | Banner de erro: "Não foi possível entrar agora. Tente novamente." |
-| **Sessão já existe** (`401 user_session_already_exists`) | Tratado como sucesso: `router.replace("/(tabs)")`. |
+| **Sessão já existe** (`401 user_session_already_exists`) | Tratado como sucesso: `router.replace("/(drawer)")`. |
 | **Sessão expirada** (`reason=expired`) | Banner **informativo**: "Sua sessão expirou. Entre novamente." Some ao enviar. |
+| **Conta excluída** (`reason=deleted`) | Banner **informativo**: "Sua conta foi excluída." Campos vazios. Some ao enviar. |
 | **Vindo do Cadastro com a sessão falhando** | Banner informativo "Conta criada. Entre para continuar." e e-mail preenchido (ver `08-cadastro.md` §5). |
-| **Aberto já com sessão** | Redireciona para `/(tabs)` antes de renderizar. |
+| **Aberto já com sessão** | Redireciona para `/(drawer)` antes de renderizar. |
 
 - **Banner de erro:** `rounded-md bg-flame-soft border border-flame/40 px-3 py-2.5`, ícone `AlertCircle` flame + texto `body-sm`, acima do botão.
 - **Banner informativo:** `rounded-md bg-surface-2 border border-info/40`, ícone `Info` na cor `info`, abaixo do texto de apoio.
@@ -136,7 +137,7 @@ Sem empty state (a tela não tem lista).
 | Ação | Destino |
 |---|---|
 | "Criar conta" | `router.push("/cadastro")` (o voltar do Cadastro retorna ao Login) |
-| Sucesso | `router.replace("/(tabs)")` |
+| Sucesso | `router.replace("/(drawer)")` |
 | Back do Android | comportamento padrão: sai do app (o Login é a raiz quando não há sessão) |
 
 ## 7. "Esqueci minha senha": proposta

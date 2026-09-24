@@ -43,6 +43,7 @@ app/
 │  ├─ series.tsx          Séries          → "/series"             Header root "Séries"
 │  ├─ estatisticas.tsx    Estatísticas    → "/estatisticas"       Header root "Estatísticas"
 │  └─ perfil.tsx          Perfil          → "/perfil"             Header root "Perfil"
+├─ excluir-conta.tsx      Excluir conta (stack, com voltar; 07-perfil §5.1) → "/excluir-conta"    exige sessão
 ├─ serie/
 │  └─ [id].tsx            Tela da série (stack, com voltar) → "/serie/123?filtro=todos|colecao|faltam"    exige sessão
 └─ car/
