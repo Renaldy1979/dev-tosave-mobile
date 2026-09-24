@@ -9,6 +9,7 @@ Itens das specs de tela e das revisões de design que **não bloqueiam** a fase 
   - `avatar.png`: imagem padrão do usuário sem foto (Perfil / avatar).
   - `thunt.png` e `sthunt.png`: logos dos atributos **Treasure Hunt** e **Super Treasure Hunt**, para usar nos badges de atributo.
   - Ícone do **WhatsApp** para o botão Compartilhar: o usuário diz que está lá, mas a pasta só tem `avatar`, `logo`, `sthunt` e `thunt`. Confirmar com ele onde está.
+- **Navegação lenta entre telas** (Android e iOS, no Expo Go), relatado pelo usuário em 24/09/2026. Investigar sem otimizar agora: medir num build de desenvolvimento ou de produção antes de mexer.
 - **Desempenho no iOS:** a navegação pareceu lenta no Expo Go. Avaliar num build de desenvolvimento ou de produção (o Expo Go roda em modo dev, sem otimizações) antes de otimizar.
 
 ## Da revisão do lote 01 (`revisao-design-lote-01.md`)

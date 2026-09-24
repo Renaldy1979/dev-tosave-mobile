@@ -14,8 +14,12 @@ Specs de design do **app do colecionador** (Expo + expo-router + NativeWind). Fo
 | `telas/06-colecao.md` | Coleção do usuário, quantidade, repetidos |
 | `telas/07-perfil.md` | Perfil do colecionador |
 | `telas/08-cadastro.md` | **Fase 2:** Cadastro pelo app (nome, e-mail, senha), erros oficiais do Appwrite |
+| `telas/09-menu-drawer.md` | **Menu hambúrguer (drawer)** no lugar das abas + Header `root` das telas raiz; como um item novo entra no menu |
+| `navegacao-fase2.md` | Inventário do app atual do usuário e funcionalidades candidatas a itens do menu |
 
 > **Fase 2: app travado por login.** O mapa e as regras abaixo já descrevem a fase 2. Na fase 1 o app era navegável sem conta e o login era um modal pedido sob demanda; esse modelo está substituído.
+>
+> **Navegação por menu (drawer):** as abas saíram (decisão do usuário, 24/09/2026). As telas raiz ficam no grupo `(drawer)` e usam o Header `root` com o botão de menu (`telas/09-menu-drawer.md`). Não existe mais TabBar.
 
 Referência visual herdada (não editar, é do portal web pausado): `docs/referencia-web/`.
 
@@ -29,14 +33,14 @@ app/
 ├─ onboarding.tsx         3 slides; só na primeira abertura                                  público
 ├─ login.tsx              Login, tela de entrada (stack normal, sem modal) → "/login?email=&reason=expired"   público
 ├─ cadastro.tsx           Cadastro (nome, e-mail, senha) → "/cadastro"                        público
-├─ (tabs)/                ── tudo daqui para baixo exige sessão ──
-│  ├─ _layout.tsx         <Tabs> com TabBar (ink); guarda de sessão: sem sessão → replace("/login")
-│  ├─ index.tsx           Home            → "/(tabs)"
-│  ├─ busca.tsx           Busca e filtros → "/busca?q=&year=&serie=&brand=&attr=&focus=1&open="
-│  ├─ colecao.tsx         Coleção         → "/colecao?q=&dup=1"
-│  └─ perfil.tsx          Perfil          → "/perfil"
+├─ (drawer)/              ── tudo daqui para baixo exige sessão ──
+│  ├─ _layout.tsx         <Drawer> (expo-router/drawer) com drawerContent custom; guarda de sessão: sem sessão → replace("/login")
+│  ├─ index.tsx           Início          → "/(drawer)"          Header root: ≡ · Logo · 🔍
+│  ├─ busca.tsx           Busca e filtros → "/busca?q=&year=&serie=&brand=&attr=&focus=1&open="   Header root "Buscar"
+│  ├─ colecao.tsx         Minha coleção   → "/colecao?q=&dup=1"   Header root "Minha coleção"
+│  └─ perfil.tsx          Perfil          → "/perfil"             Header root "Perfil"
 └─ car/
-   └─ [id].tsx            Detalhe do carro (Stack sobre as tabs, sem TabBar) → "/car/123"    exige sessão
+   └─ [id].tsx            Detalhe do carro (Stack sobre o drawer, sem menu, com voltar) → "/car/123"    exige sessão
 ```
 
 Rotas públicas: `index` (splash), `onboarding`, `login` e `cadastro`. Todas as outras exigem sessão. A guarda fica num só lugar (root `_layout.tsx`, ou um grupo `(app)` com o seu `_layout`), nunca repetida por tela.
@@ -54,12 +58,20 @@ Rotas públicas: `index` (splash), `onboarding`, `login` e `cadastro`. Todas as 
                │  └────┬────┘  "Entrar" / voltar       └────┬─────┘
                │       │ entrar (replace)                   │ conta criada + sessão (replace)
                ▼       ▼                                    ▼
-     ┌─────────────────────────── (tabs) ───────────────────────────┐
-     │     Início ◀──▶ Buscar ◀──▶ Coleção ◀──▶ Perfil                │
-     └──────┬───────────┬────────────┬──────────────────────┬───────┘
-            │ card      │ card       │ card                 │ Sair (Dialog) ──replace──▶ login
-            ▼           ▼            ▼
-                    car/[id]  (push; "Mais da série" faz push de outro car/[id])
+     ┌──────────────────── (drawer) · telas raiz com Header root (≡) ───────────────────┐
+     │  Início      Buscar      Minha coleção      Perfil                                  │
+     └────┬───────────┬──────────────┬──────────────────────────────────────────────────┘
+          │ card      │ card         │ card
+          ▼           ▼              ▼
+                  car/[id]  (push; "Mais da série" faz push de outro car/[id])
+
+     ≡ / gesto de borda ──▶ ┌── drawer (80%, máx. 320 pt) ──────────┐
+                            │ [avatar · nome · e-mail] ──▶ Perfil    │
+                            │ Início · Buscar · Minha coleção · Perfil│  item ──navigate──▶ tela raiz (fecha o menu)
+                            │ ─────────────────────────────────────  │
+                            │ Sair ──ConfirmDialog──replace──▶ login │
+                            │ Versão x.y.z                           │
+                            └────────────────────────────────────────┘
 
   qualquer tela protegida + 401 (sessão expirada/revogada) ──replace──▶ login?reason=expired
   e-mail já cadastrado no Cadastro ──"Entrar com este e-mail" (replace)──▶ login?email=…
@@ -68,15 +80,16 @@ Rotas públicas: `index` (splash), `onboarding`, `login` e `cadastro`. Todas as 
 
 **Regras**
 - **App travado:** sem sessão só existem splash, onboarding, login e cadastro. Todas as outras rotas exigem sessão.
-- **Guarda de sessão:** num único ponto. Sem sessão, qualquer rota protegida faz `router.replace("/login")`; com sessão, `login` e `cadastro` fazem `router.replace("/(tabs)")`. Nada de guarda por tela nem de `LoginGate`.
+- **Guarda de sessão:** num único ponto. Sem sessão, qualquer rota protegida faz `router.replace("/login")`; com sessão, `login` e `cadastro` fazem `router.replace("/(drawer)")`. Nada de guarda por tela nem de `LoginGate`.
 - **Login é raiz:** entra sempre por `replace`, nunca por `push`. O back do Android no Login sai do app. O Cadastro é o único `push` a partir do Login, e seu voltar retorna ao Login.
-- **Entrar no app** (login ou cadastro com sucesso) faz `router.replace("/(tabs)")`: o voltar nunca retorna a Login ou Cadastro.
-- **Sair** (Perfil) → `account.deleteSession("current")` → limpa estado local (coleção, cache) → `router.replace("/login")`. Tema e `onboarding.seen` ficam.
+- **Entrar no app** (login ou cadastro com sucesso) faz `router.replace("/(drawer)")`: o voltar nunca retorna a Login ou Cadastro.
+- **Sair** (rodapé do drawer ou Perfil, mesmo ConfirmDialog) → `account.deleteSession("current")` → limpa estado local (coleção, cache) → `router.replace("/login")`. Tema e `onboarding.seen` ficam.
 - **Sessão expirada:** `401` do Appwrite em qualquer tela protegida → limpa estado local → `router.replace("/login?reason=expired")`.
 - **Deep links** (`scheme: "tosave"`): `tosave://car/123` abre o detalhe se houver sessão. Sem sessão cai no Login; retomar o deep link depois de entrar é fase 1.5.
 - Splash e onboarding usam `router.replace` (o voltar nunca retorna a eles).
 - Estado de busca, filtros e "repetidos" vive nos **search params** (`router.setParams`), então o voltar do detalhe restaura a lista exata.
-- Headers: `headerShown: false` no Stack e nas Tabs; cada tela renderiza seu `Header` (componentes §7). Login e Cadastro não têm Header (Cadastro tem só o voltar glass).
+- Headers: `headerShown: false` no Stack e no Drawer; cada tela renderiza seu `Header` (componentes §7): `root` nas 4 telas do drawer, `transparent` no Detalhe.
+- **Menu:** abre pelo `≡` ou pelo gesto da borda esquerda (só nas telas raiz); fecha ao navegar, no overlay e no back do Android. Itens novos entram só quando a tela existe, por 1 linha na lista de itens (`telas/09-menu-drawer.md` §2.5). Login e Cadastro não têm Header (Cadastro tem só o voltar glass).
 - Animações de stack: detalhe com `animation: "slide_from_right"`, `gestureEnabled: true`, `fullScreenGestureEnabled: true` (iOS). Login e Cadastro com a animação padrão do Stack (**sem** `presentation: "modal"`).
 - **Obrigatório antes de publicar nas lojas (fora da fase 2):** "Esqueci minha senha", "Excluir conta" e Termos/Privacidade (ver `ESPECIFICACAO-MOBILE.md`). Não aparecem no mapa até existirem.
 

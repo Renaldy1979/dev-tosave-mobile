@@ -199,6 +199,8 @@ Badges não são interativos (`accessible` agrupado com o pai).
 
 ## 6. TabBar
 
+> **Substituída pelo menu drawer** (`telas/09-menu-drawer.md`, decisão do usuário de 24/09/2026). Nenhuma tela usa TabBar. Esta seção fica só como histórico.
+
 Custom `tabBar` do `<Tabs>` do expo-router (`app/(tabs)/_layout.tsx`). **Sempre ink** nos dois temas.
 
 ```
@@ -253,7 +255,9 @@ type HeaderProps = {
 - Voltar: `router.back()`; se não houver histórico (deep link), `router.replace("/(tabs)")`.
 - Gesto de voltar nativo (swipe da borda no iOS, back do Android) sempre ativo.
 
-**HomeHeader** (específico da Home, ink): logo 96 pt à esquerda; à direita, Avatar 32 que leva ao Perfil ou, sem sessão, `Button ghost sm` "Entrar" (texto `ink-fg`) que abre o login em modal. Sem sino de notificações (fora da fase 1). Ver `telas/03-home.md`.
+**Header `root`** (telas raiz com menu): `≡` 44 pt à esquerda + título h3 (ou Logo sm na Home) + até 1 ação à direita. Spec em `telas/09-menu-drawer.md` §1. Substitui o HomeHeader e o `large` nas telas raiz.
+
+~~**HomeHeader**~~ (histórico, substituído pelo Header `root`) (específico da Home, ink): logo 96 pt à esquerda; à direita, Avatar 32 que leva ao Perfil ou, sem sessão, `Button ghost sm` "Entrar" (texto `ink-fg`) que abre o login em modal. Sem sino de notificações (fora da fase 1). Ver `telas/03-home.md`.
 
 ---
 

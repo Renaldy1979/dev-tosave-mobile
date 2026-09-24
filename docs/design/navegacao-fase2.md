@@ -169,7 +169,9 @@ Stack técnico do app atual:
 - `03-home.md`: faixa "Novidades"; "Ver tudo" das séries vai para `/series`.
 - `06-colecao.md`: link "Ver estatísticas".
 - `07-perfil.md`: grupo "MEU TOSAVE".
-- Specs novas: `09-trocas.md`, `10-novidades.md`, `11-notificacoes.md`, `12-estatisticas.md`, `13-series.md`, `14-garagens.md` (se confirmada).
+- Specs novas: `10-trocas.md`, `11-novidades.md`, `12-notificacoes.md`, `13-estatisticas.md`, `14-series.md`, `15-garagens.md` (se confirmada). O número 09 ficou com o menu.
+
+> **Decisão do usuário (24/09/2026):** as abas saem e entra um **menu hambúrguer (drawer)**. Ver `telas/09-menu-drawer.md`. As funcionalidades desta análise entram como **itens do menu** quando existirem, e não como abas nem atalhos. As §2.2 (5 abas) e §2.4 (mapa) ficam como histórico; os atalhos contextuais da §2.3 continuam válidos como complemento.
 
 ---
 

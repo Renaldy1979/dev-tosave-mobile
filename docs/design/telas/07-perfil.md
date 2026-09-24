@@ -101,8 +101,8 @@ Entrada: ListRow "Alterar senha" (ícone `Lock`, `ChevronRight`) no grupo CONTA,
 - Persistido em `tosave.theme`. "Sistema" acompanha `useColorScheme()` em tempo real.
 
 ## 5. Sair
-- Toque em "Sair" abre Dialog: título "Sair da sua conta?", texto "Você continua podendo explorar as miniaturas, mas precisará entrar de novo para ver sua coleção.", ações "Sair" (`danger`) + "Cancelar" (`ghost`).
-- Confirmar: `auth.signOut()` → limpa sessão e store da coleção → `router.replace("/")` (Home como visitante; a tab Perfil volta a ser "Entrar"). Preferência de tema e `onboarding.seen` são mantidos.
+- **Fase 2 / menu:** "Sair" usa o **mesmo ConfirmDialog do drawer** (`09-menu-drawer.md` §2.4): título "Sair da sua conta?", texto "Você vai precisar entrar de novo para ver sua coleção.", ações "Sair" (`danger`) + "Cancelar" (`ghost`), ícone `LogOut`.
+- Confirmar: `account.deleteSession("current")` → limpa o estado local → `router.replace("/login")`. Preferência de tema e `onboarding.seen` são mantidos.
 
 ## 6. Navegação
 
@@ -112,7 +112,7 @@ Entrada: ListRow "Alterar senha" (ícone `Lock`, `ChevronRight`) no grupo CONTA,
 | Tocar em "REPETIDOS" | `router.push("/colecao?dup=1")` |
 | Editar perfil | BottomSheet na própria tela |
 | Alterar senha (fase 2) | BottomSheet na própria tela (§3.1) |
-| Sair | Dialog → `router.replace("/")` |
+| Sair | ConfirmDialog → `router.replace("/login")` |
 
 ## 7. Estados
 
