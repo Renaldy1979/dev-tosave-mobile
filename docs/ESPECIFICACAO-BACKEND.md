@@ -343,6 +343,11 @@ interface YearProgressRow { year: number; owned: number; carCount: number; pct: 
 - **O coração não muda nada:** `addToCollection`/`setCollectionQuantity`/`removeFromCollection` já atualizam série e ano no servidor. O app só precisa reler as telas ao voltar (foco) ou invalidar o cache da série tocada.
 - **Não carregar nada inteiro:** só `listYearProgress` é uma lista completa, e é pequena.
 
+**Acordado com o Forja (24/09/2026):**
+
+- **Tela da série:** o app lê os carros da série no catálogo (`cars` com `equal("serieId")`, ordem de posição, páginas de 100; a maior série tem 520). A **posse daquela série** vem do servidor: `collection_items` com `equal("userId")` e `equal("serieId")`, `select(["carId", "quantity"])`, `limit(600)` (índice `idx_user_serie`), mesclada no store da coleção. Assim coração, contagens e barra andam juntos na hora, e o resultado fica correto para coleções de qualquer tamanho. A Function `serie-progress` continua disponível, mas o app não a usa.
+- **Estatísticas:** o app lê todas as linhas de `user_series_stats` com `owned > 0` (no máximo 357, uma por série existente, em páginas de 100) e ordena por Maior % ou Nome no próprio app. As colunas `pct`/`serieCarCount`/`serieTitle` continuam mantidas pelo servidor para uso futuro.
+
 ## 10. Plano de migração (origem somente leitura)
 
 ### Acesso
