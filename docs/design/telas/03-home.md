@@ -60,8 +60,8 @@ HomeHeader (Logo sm + Avatar) · SearchBar `trigger` · SectionHeader · Feature
 | Ação | Destino |
 |---|---|
 | Tocar na SearchBar | `router.push("/busca?focus=1")` (troca para a tab Buscar com o campo focado) |
-| Tocar em SeriesCard | `router.push("/busca?serie={id}")` (Busca filtrada pela série) |
-| "Ver tudo" das séries | `router.push("/busca")` com o FilterSheet aberto na seção Série (`?open=serie`) |
+| Tocar em SeriesCard | `router.push("/serie/{id}")` (tela da série, `10-series.md`) |
+| "Ver tudo" das séries | `router.navigate("/series")`, lista completa de séries (`10-series.md`) |
 | Tocar em CarCard | `router.push("/car/{id}")` |
 | Coração no card | com sessão: toggle da coleção (otimista, ver componentes §13), sem sair da tela. Sem sessão: abre o login em modal e, depois de entrar, o carro é adicionado |
 | Avatar | `router.push("/perfil")` |

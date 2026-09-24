@@ -310,6 +310,39 @@ Regras gerais:
 | `addToCollection(carId)`, `setCollectionQuantity(carId, qty)`, `removeFromCollection(carId)` | `{ item: CollectionItem \| null; summary: CollectionSummary }`, via Function `collection` |
 | `getCollection` | **removido**. O `useCollectionStore` passa a guardar um cache de quantidades por `carId` |
 
+### Séries e Estatísticas (telas 10 e 11, 24/09/2026)
+
+Tipos (em `src/types.ts`):
+
+```ts
+type SerieFilter = "all" | "owned" | "missing";
+interface SerieListItem extends Serie { carCount: number; owned: number }                    // owned = modelos do usuário na série
+interface SerieCar extends CarListItem { owned: boolean; quantity: number }
+interface SerieProgress { items: SerieCar[]; counts: { total: number; owned: number; missing: number }; nextCursor: string | null }
+interface StatsSummary extends CollectionSummary { catalogTotal: number; catalogPct: number } // catalogPct 0..100 (float)
+interface SerieProgressRow { serieId: string; title: string; imagem: string; owned: number; carCount: number; pct: number; complete: boolean } // pct 0..100
+interface YearProgressRow { year: number; owned: number; carCount: number; pct: number }
+```
+
+#### `catalog.ts`
+
+| Função | Implementação |
+|---|---|
+| `listSeriesPaged({ q?, cursor?, pageSize = 30 })` → `{ items: SerieListItem[]; total: number \| null; nextCursor }` | `series`: `orderAsc("title")`, `orderAsc("$id")`, `limit`, `cursorAfter`. Com `q`: **`Query.contains("title", q)`** (busca por trecho, sem diferenciar maiúsculas; ver §15). `owned` numa 2ª query: `user_series_stats` com `Query.equal("serieId", ids da página)` (a row security já restringe ao usuário). `imagem` = logo pela prévia de `imageFileId` (largura 300, qualidade 90, webp) ou `""` |
+| `getSerie(id)` → `SerieListItem \| null` | `getRow("series")` + a linha `user_series_stats` da série (404 → `owned` 0) |
+| `getSerieProgress(serieId, { filter = "all", cursor?, pageSize = 20 })` → `SerieProgress` | Function **`serie-progress`** (síncrona, POST, corpo `{ serieId, filter, cursor, pageSize }`). Ordem da série (`seriePositionNum`; sem posição no fim, por título). `counts` sempre da série inteira, para os rótulos do segmento. Erros: 400 `invalid_request`, 401 |
+
+#### `stats.ts` (novo)
+
+| Função | Implementação |
+|---|---|
+| `getStatsSummary()` → `StatsSummary` | `user_stats` do usuário (404 → zeros) + `catalog_meta` `global` (`totalCars`). `catalogPct = totalModels / totalCars * 100` |
+| `listSeriesProgress({ sort = "pct", cursor?, pageSize = 30 })` → `{ items: SerieProgressRow[]; nextCursor }` | `user_series_stats` com `equal("userId", id)` e `greaterThan("owned", 0)`. Ordem `"pct"`: `orderDesc("pct")`, `orderDesc("owned")`, `orderAsc("serieTitle")`. Ordem `"name"`: `orderAsc("serieTitle")`. Logos: `series` com `equal("$id", ids da página)`. `pct` da linha em milésimos, travado em 1000: o app divide por 10. `complete = pct === 1000` |
+| `listYearProgress()` → `YearProgressRow[]` | `user_year_stats` com `equal("userId", id)`, `greaterThan("owned", 0)`, `orderDesc("year")` (no máximo ~30 anos) + `year_counts` com `equal("$id", ["y2026", …])`. `pct = owned / carCount * 100`, travado em 100 |
+
+- **O coração não muda nada:** `addToCollection`/`setCollectionQuantity`/`removeFromCollection` já atualizam série e ano no servidor. O app só precisa reler as telas ao voltar (foco) ou invalidar o cache da série tocada.
+- **Não carregar nada inteiro:** só `listYearProgress` é uma lista completa, e é pequena.
+
 ## 10. Plano de migração (origem somente leitura)
 
 ### Acesso
@@ -625,3 +658,40 @@ Execução síncrona pelo portal. O usuário vem do header do Appwrite e o time 
 6. O parceiro vê as submissões de **outros** parceiros (para evitar duplicata) ou só as próprias?
 7. Aviso ao parceiro quando aprovado ou rejeitado: e-mail (precisa de SMTP), push ou só no portal?
 8. É preciso **despublicar** sem apagar (tirar do app mantendo o registro)?
+
+## 15. Séries e Estatísticas: backend (24/09/2026, aplicado)
+
+### O que foi criado (só criação; a coleção real não foi alterada)
+
+| Recurso | Detalhe |
+|---|---|
+| `user_series_stats` | `userId`, `serieId`, `owned`, `serieCarCount`, `pct` (milésimos, travado em 1000), `serieTitle`. `$id` = `us_` + sha256(userId:serieId)[0:32]. Row security com leitura do dono. Índices: único (`userId`, `serieId`), (`userId`, `pct`↓, `owned`↓), (`userId`, `serieTitle`), (`userId`, `owned`↓), (`serieId`) |
+| `user_year_stats` | `userId`, `year`, `owned`. `$id` = `uy_` + sha256(userId:year)[0:32]. Row security com leitura do dono. Único (`userId`, `year`) |
+| `year_counts` | `$id` = `y<ano>`, `year`, `carCount`. Leitura para `users`. 28 anos, soma 10.655 |
+| Índices novos | `series.ft_title` (fulltext), `collection_items` (`userId`, `serieId`) e (`userId`, `carYear`) |
+| Function `collection` | Quando um **modelo** entra ou sai (quantidade de 0 para 1 ou de 1 para 0; mudar a quantidade não conta), faz +1/−1 em `user_series_stats` e `user_year_stats` na **mesma transação** de `user_stats`. Depois do commit, recalcula `pct`/`serieCarCount`/`serieTitle` a partir do `owned` já gravado: com toques concorrentes, o último converge |
+| Function `catalog-sync` | Mantém `year_counts` (recontagem completa e ano do carro no evento). Quando o `carCount` de uma série muda, atualiza `serieCarCount`/`pct` de todos os usuários daquela série. Renomear a série propaga `serieTitle` |
+| Function `user-cleanup` | Apaga também `user_series_stats` e `user_year_stats` do usuário removido |
+| Function **`serie-progress`** (nova) | Síncrona, `execute: users`, só `rows.read`. Carros da série + possuídos pelo usuário, com filtro Todos/Na coleção/Faltam, cursor e contagens |
+| `npm run user-stats-backfill -- --user=<id> \| --all` | Recalcula as duas tabelas a partir de `collection_items`. **Só escreve nas tabelas novas.** Idempotente, confere com `user_stats.totalModels` |
+| `npm run validate-stats` | Validação ponta a ponta com usuário de teste: 17/17 OK |
+
+**Backfill da conta importada:**
+
+- 72 séries e 8 anos; soma por série = soma por ano = 375 = `user_stats.totalModels`.
+- `collection_items` ficou com o mesmo hash antes e depois, e `user_stats` com os mesmos valores e o mesmo `$updatedAt`: a coleção não foi alterada.
+
+### Respostas às perguntas da Aquarela
+
+1. **Busca de séries:** usar **`Query.contains("title", termo)`**, que faz busca por trecho (`LIKE %x%`) e não diferencia maiúsculas.
+   - Resultados: "J-Imp", "j-imp" e "imports" acham HW J-Imports.
+   - O fulltext casa prefixo de palavra ("imp" acha), mas combina vários termos com OU e ignora termos de 2 letras: "hw j" trouxe 5 séries erradas; "fast furious" trouxe Fast Foodie primeiro.
+   - Com 357 séries, o `contains` sem índice é instantâneo. O índice fulltext fica disponível, mas não é usado.
+2. **Faltam:** a maior série (First Editions) tem **520** carros. Mesmo assim, "Faltam" **paginado** exige servidor: o Appwrite não tem NOT IN (`notEqual` aceita um só valor, e cada chamada aceita no máximo 100 queries). Por isso existe a Function `serie-progress`: ~0,9 s a frio, bem menos quente. O app não calcula nada.
+3. **Ordenar por maior %:** feito como a Aquarela recomendou. `serieCarCount`, `pct` e `serieTitle` estão desnormalizados em `user_series_stats`, com ordenação e paginação no servidor. A Function `collection` os mantém quando a posse muda, e a `catalog-sync` quando a série muda.
+4. **Por ano:** confirmado. `user_year_stats.owned ÷ year_counts.carCount`, só com `owned > 0`, do ano mais novo para o mais antigo.
+5. **`catalog_meta.totalCars`:** sim, é mantido pela `catalog-sync` (recontagem nos eventos de criar/apagar carro e na agenda das 04:00). Hoje vale 10.655.
+6. **`owned > carCount`:** só acontece se um carro que está em alguma coleção for apagado do catálogo, porque o item da coleção continua lá, desnormalizado.
+   - O backend limita `pct` a 1000 (100%) nas duas Functions e no backfill.
+   - As contagens do `serie-progress` são exatas: só contam carros que existem.
+   - Na regra de moderação (§14), o parceiro não pode apagar carro que está em coleção. Só o admin poderia.

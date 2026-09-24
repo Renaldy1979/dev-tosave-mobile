@@ -56,6 +56,7 @@ Os itens do usuário, com adicionar/remover unidades e filtro de **repetidos** (
 | Pressão longa no card | menu contextual em BottomSheet `dynamic`: "Ver detalhes", "Compartilhar no WhatsApp", "Remover da coleção" (danger) |
 | Tocar no card | `router.push("/car/{id}")` |
 | Tocar em "REPETIDOS" no resumo | liga `dup=1` |
+| Link "Ver estatísticas" (abaixo do resumo; some com a coleção vazia) | `router.navigate("/estatisticas")` (`11-estatisticas.md`) |
 | Pull-to-refresh | recarrega lista e resumo |
 
 Com `dup=1`, se um item baixa para quantity 1 ele continua visível até o próximo refresh ou troca de filtro (evita o card sumir sob o dedo), com o badge "Repetido" removido.

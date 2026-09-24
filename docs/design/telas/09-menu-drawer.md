@@ -37,6 +37,8 @@ Substitui o Header `large` e o HomeHeader nas 4 telas raiz. É uma variante nova
 | Início | Logo sm (sem texto) | `Search` → `router.navigate("/busca?focus=1")`, label "Buscar miniaturas" |
 | Buscar | "Buscar" | nenhuma |
 | Minha coleção | "Minha coleção" | nenhuma (ordenação continua no corpo da tela) |
+| Séries | "Séries" | nenhuma (busca no corpo da tela) |
+| Estatísticas | "Estatísticas" | nenhuma |
 | Perfil | "Perfil" | nenhuma |
 
 ## 2. O drawer
@@ -87,8 +89,12 @@ Substitui o Header `large` e o HomeHeader nas 4 telas raiz. É uma variante nova
 |---|---|---|---|
 | 1 | Início | `Home` | `/(drawer)` (index) |
 | 2 | Buscar | `Search` | `/busca` |
-| 3 | Minha coleção | `Heart` | `/colecao` |
-| 4 | Perfil | `User` | `/perfil` |
+| 3 | Séries | `Layers` | `/series` (`10-series.md`) |
+| 4 | Minha coleção | `Heart` | `/colecao` |
+| 5 | Estatísticas | `ChartColumn` | `/estatisticas` (`11-estatisticas.md`) |
+| 6 | Perfil | `User` | `/perfil` |
+
+Ordem confirmada: primeiro o catálogo (Início, Buscar, Séries), depois o pessoal (Minha coleção, Estatísticas, Perfil). Com 6 itens a lista ainda fica sem títulos de seção (§2.5, regra 4); o 7º item introduz as seções PRINCIPAL · MINHA COLEÇÃO. Séries e Estatísticas entram **junto com as suas telas**, nunca antes delas.
 
 - Cada item: `Pressable` `flex-row items-center gap-3 min-h-12 mx-3 px-3 rounded-md`, ícone 22 + label `body font-sans-medium`.
 - **Inativo:** ícone `fg-muted`, texto `fg`; pressed `bg-surface-3`.

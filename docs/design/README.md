@@ -15,6 +15,8 @@ Specs de design do **app do colecionador** (Expo + expo-router + NativeWind). Fo
 | `telas/07-perfil.md` | Perfil do colecionador |
 | `telas/08-cadastro.md` | **Fase 2:** Cadastro pelo app (nome, e-mail, senha), erros oficiais do Appwrite |
 | `telas/09-menu-drawer.md` | **Menu hambúrguer (drawer)** no lugar das abas + Header `root` das telas raiz; como um item novo entra no menu |
+| `telas/10-series.md` | Lista de todas as séries (busca, paginação) e tela da série (Você tem X de N, Todos / Na coleção / Faltam) |
+| `telas/11-estatisticas.md` | Resumo, % do catálogo, progresso por série e por ano |
 | `navegacao-fase2.md` | Inventário do app atual do usuário e funcionalidades candidatas a itens do menu |
 
 > **Fase 2: app travado por login.** O mapa e as regras abaixo já descrevem a fase 2. Na fase 1 o app era navegável sem conta e o login era um modal pedido sob demanda; esse modelo está substituído.
@@ -38,7 +40,11 @@ app/
 │  ├─ index.tsx           Início          → "/(drawer)"          Header root: ≡ · Logo · 🔍
 │  ├─ busca.tsx           Busca e filtros → "/busca?q=&year=&serie=&brand=&attr=&focus=1&open="   Header root "Buscar"
 │  ├─ colecao.tsx         Minha coleção   → "/colecao?q=&dup=1"   Header root "Minha coleção"
+│  ├─ series.tsx          Séries          → "/series"             Header root "Séries"
+│  ├─ estatisticas.tsx    Estatísticas    → "/estatisticas"       Header root "Estatísticas"
 │  └─ perfil.tsx          Perfil          → "/perfil"             Header root "Perfil"
+├─ serie/
+│  └─ [id].tsx            Tela da série (stack, com voltar) → "/serie/123?filtro=todos|colecao|faltam"    exige sessão
 └─ car/
    └─ [id].tsx            Detalhe do carro (Stack sobre o drawer, sem menu, com voltar) → "/car/123"    exige sessão
 ```
@@ -59,7 +65,7 @@ Rotas públicas: `index` (splash), `onboarding`, `login` e `cadastro`. Todas as 
                │       │ entrar (replace)                   │ conta criada + sessão (replace)
                ▼       ▼                                    ▼
      ┌──────────────────── (drawer) · telas raiz com Header root (≡) ───────────────────┐
-     │  Início      Buscar      Minha coleção      Perfil                                  │
+     │  Início · Buscar · Séries · Minha coleção · Estatísticas · Perfil                   │
      └────┬───────────┬──────────────┬──────────────────────────────────────────────────┘
           │ card      │ card         │ card
           ▼           ▼              ▼
@@ -67,7 +73,8 @@ Rotas públicas: `index` (splash), `onboarding`, `login` e `cadastro`. Todas as 
 
      ≡ / gesto de borda ──▶ ┌── drawer (80%, máx. 320 pt) ──────────┐
                             │ [avatar · nome · e-mail] ──▶ Perfil    │
-                            │ Início · Buscar · Minha coleção · Perfil│  item ──navigate──▶ tela raiz (fecha o menu)
+                            │ Início · Buscar · Séries ·             │
+                            │ Minha coleção · Estatísticas · Perfil  │  item ──navigate──▶ tela raiz (fecha o menu)
                             │ ─────────────────────────────────────  │
                             │ Sair ──ConfirmDialog──replace──▶ login │
                             │ Versão x.y.z                           │
