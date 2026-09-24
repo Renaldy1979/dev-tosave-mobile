@@ -1,5 +1,13 @@
 import type { Href } from "expo-router";
-import { Heart, Home, Search, User, type LucideIcon } from "lucide-react-native";
+import {
+  ChartColumn,
+  Heart,
+  Home,
+  Layers,
+  Search,
+  User,
+  type LucideIcon,
+} from "lucide-react-native";
 
 /**
  * Itens do menu lateral (`docs/design/telas/09-menu-drawer.md` §2.3 e
@@ -24,6 +32,8 @@ export type DrawerItem = {
 export const DRAWER_ITEMS: DrawerItem[] = [
   { name: "index", route: "/(drawer)", label: "Início", icon: Home },
   { name: "busca", route: "/busca", label: "Buscar", icon: Search },
+  { name: "series", route: "/series", label: "Séries", icon: Layers },
   { name: "colecao", route: "/colecao", label: "Minha coleção", icon: Heart },
+  { name: "estatisticas", route: "/estatisticas", label: "Estatísticas", icon: ChartColumn },
   { name: "perfil", route: "/perfil", label: "Perfil", icon: User },
 ];

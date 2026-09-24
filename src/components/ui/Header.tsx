@@ -10,7 +10,7 @@ import Animated, {
 import type { SharedValue } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { router } from "expo-router";
+import { router, type Href } from "expo-router";
 import { useTheme } from "@/theme/ThemeProvider";
 import { Text } from "./Text";
 import { IconButton } from "./IconButton";
@@ -58,6 +58,8 @@ type Props = {
   ink?: boolean;
   /** `root`: ação única à direita. */
   action?: RootHeaderAction;
+  /** Destino do voltar quando não há histórico (deep link). */
+  backFallback?: Href;
 };
 
 export function Header({
@@ -72,6 +74,7 @@ export function Header({
   logo,
   ink,
   action,
+  backFallback = "/(drawer)",
 }: Props) {
   const insets = useSafeAreaInsets();
   const { c } = useTheme();
@@ -89,7 +92,7 @@ export function Header({
     if (router.canGoBack()) {
       router.back();
     } else {
-      router.replace("/(drawer)");
+      router.replace(backFallback);
     }
   };
 

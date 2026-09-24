@@ -22,6 +22,9 @@ type Option<T extends string> = {
   value: T;
   label: string;
   icon?: LucideIcon;
+  /** Rótulo lido pelo leitor de tela, quando difere do visível
+   *  (ex.: "Faltam, 4 miniaturas" para "Faltam 4"). */
+  accessibilityLabel?: string;
 };
 
 type Props<T extends string> = {
@@ -103,7 +106,7 @@ export function SegmentedControl<T extends string>({
             key={option.value}
             accessibilityRole="radio"
             accessibilityState={{ selected: active }}
-            accessibilityLabel={`${option.label}${active ? ", selecionado" : ""}, ${idx + 1} de ${options.length}`}
+            accessibilityLabel={`${option.accessibilityLabel ?? option.label}${active ? ", selecionado" : ""}, ${idx + 1} de ${options.length}`}
             onPress={() => onChange(option.value)}
             className="flex-1 flex-row items-center justify-center gap-1.5 rounded-md active:opacity-80 min-h-12"
           >

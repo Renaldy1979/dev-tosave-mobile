@@ -257,6 +257,33 @@ export async function getCollectionQuantities(
 }
 
 /**
+ * Posse do usuário numa série: `carId → quantity` (`collection_items`
+ * por `userId` + `serieId`, índice `idx_user_serie`; a maior série tem
+ * 520 carros). Usada pela tela da série para não depender do store,
+ * que carrega só a 1ª página da coleção.
+ */
+export async function getSerieOwnership(serieId: string): Promise<Record<string, number>> {
+  const userId = getCurrentSession().user?.id ?? (await getCurrentUser())?.id;
+  if (!userId) throw new ServiceError("unauthorized", "Sem sessão.");
+  const result = await withServiceError(() =>
+    tablesDb.listRows<QuantityRow>({
+      databaseId: APPWRITE_DATABASE_ID,
+      tableId: TABLE.collectionItems,
+      queries: [
+        Query.equal("userId", userId),
+        Query.equal("serieId", serieId),
+        Query.select(["carId", "quantity"]),
+        Query.limit(600),
+      ],
+      total: false,
+    })
+  );
+  const map: Record<string, number> = {};
+  for (const row of result.rows ?? []) map[row.carId] = row.quantity;
+  return map;
+}
+
+/**
  * Quantidade de um carro na coleção. O `$id` da linha em
  * `collection_items` é determinístico (`ci_<hash(userId:carId)>`), mas
  * aqui preferimos consultar por `carId` (a row security já restringe

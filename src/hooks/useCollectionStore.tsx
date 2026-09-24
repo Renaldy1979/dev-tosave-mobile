@@ -57,6 +57,12 @@ type CollectionActions = {
   setQuantity: (carId: string, quantity: number) => Promise<void>;
   remove: (carId: string) => Promise<void>;
   refresh: () => Promise<void>;
+  /**
+   * Mescla a posse lida no servidor para um conjunto de carros (ex.: a
+   * série aberta): cobre coleções maiores que a 1ª página do store.
+   * Carros da lista sem entrada no mapa ficam como "não possui".
+   */
+  mergeOwnership: (cars: Car[], quantities: Record<string, number>) => void;
 };
 
 type CollectionContextValue = CollectionState & CollectionActions;
@@ -230,6 +236,26 @@ export function CollectionProvider({ children }: CollectionProviderProps) {
     [user, items, recomputeSummary]
   );
 
+  const mergeOwnership = useCallback((list: Car[], quantities: Record<string, number>) => {
+    setItems((cur) => {
+      const updated = { ...cur };
+      for (const car of list) {
+        const q = quantities[car.id] ?? 0;
+        if (q > 0) updated[car.id] = q;
+        else delete updated[car.id];
+      }
+      return updated;
+    });
+    setCarsById((cur) => {
+      const updated = { ...cur };
+      for (const car of list) {
+        if ((quantities[car.id] ?? 0) > 0 && !updated[car.id]) updated[car.id] = car;
+      }
+      return updated;
+    });
+    setVersion((v) => v + 1);
+  }, []);
+
   const value = useMemo<CollectionContextValue>(
     () => ({
       items,
@@ -242,6 +268,7 @@ export function CollectionProvider({ children }: CollectionProviderProps) {
       setQuantity: setQuantityAction,
       remove: removeAction,
       refresh,
+      mergeOwnership,
     }),
     [
       items,
@@ -254,6 +281,7 @@ export function CollectionProvider({ children }: CollectionProviderProps) {
       setQuantityAction,
       removeAction,
       refresh,
+      mergeOwnership,
     ]
   );
 

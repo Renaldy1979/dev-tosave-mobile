@@ -4,6 +4,7 @@ import {
   previewUrl,
   APPWRITE_FUNCTION_COLLECTION,
   withServiceError,
+  isNotFound,
   Query,
 } from "./_appwrite";
 import type { Models } from "react-native-appwrite";
@@ -37,6 +38,7 @@ const TABLE = {
   attributes: "attributes",
   carImages: "car_images",
   catalogMeta: "catalog_meta",
+  userSeriesStats: "user_series_stats",
 } as const;
 
 /* ================================================================== */
@@ -145,7 +147,7 @@ function brandRowToBrand(row: BrandRow): Brand {
   };
 }
 
-function seriesRowToSerie(row: SeriesRow): Serie {
+function seriesRowToSerie(row: SeriesRow): SerieWithCount {
   const s: Serie = {
     id: row.$id,
     title: row.title,
@@ -423,6 +425,153 @@ export async function listSeries(
   return (result.rows ?? []).map(seriesRowToSerie);
 }
 
+/** Série com o total de miniaturas do catálogo (`series.carCount`). */
+export type SerieWithCount = Serie & { carCount: number };
+
+/** Série da lista, com os modelos que o usuário tem nela. */
+export type SerieListItem = SerieWithCount & { owned: number };
+
+export interface PaginatedSeries {
+  items: SerieListItem[];
+  /** Total da consulta (só na 1ª página; `null` nas demais). */
+  total: number | null;
+  nextCursor: string | null;
+}
+
+/**
+ * Lista de séries (`10-series.md` §A): A–Z (desempate por `$id`),
+ * paginada por cursor. A busca é por trecho do título
+ * (`Query.contains`, sem diferenciar maiúsculas): o fulltext junta os
+ * termos com OU e ignora palavras curtas como "hw" (backend §15).
+ * `owned` de cada série vem de `user_series_stats`, só para a página.
+ */
+export async function listSeriesPaged(
+  options: { search?: string; cursor?: string | null; pageSize?: number } = {}
+): Promise<PaginatedSeries> {
+  const pageSize = options.pageSize ?? 30;
+  const term = options.search?.trim() ?? "";
+  const queries: string[] = [Query.orderAsc("title"), Query.orderAsc("$id"), Query.limit(pageSize)];
+  if (term) queries.push(Query.contains("title", term));
+  if (options.cursor) queries.push(Query.cursorAfter(options.cursor));
+  const result = await withServiceErr(() =>
+    tablesDb.listRows<SeriesRow>({
+      databaseId: APPWRITE_DATABASE_ID,
+      tableId: TABLE.series,
+      queries,
+      total: !options.cursor,
+    })
+  );
+  const rows = result.rows ?? [];
+  const last = rows[rows.length - 1];
+  const owned = await getOwnedBySerie(rows.map((r) => r.$id));
+  return {
+    items: rows.map((r) => ({ ...seriesRowToSerie(r), owned: owned[r.$id] ?? 0 })),
+    total: options.cursor ? null : result.total ?? rows.length,
+    nextCursor: rows.length === pageSize && last ? last.$id : null,
+  };
+}
+
+interface UserSeriesStatsRow extends Models.Row {
+  serieId: string;
+  owned: number;
+}
+
+/**
+ * Modelos possuídos por série, só para os ids pedidos (uma página). A
+ * row security de `user_series_stats` já restringe ao usuário logado.
+ */
+export async function getOwnedBySerie(serieIds: string[]): Promise<Record<string, number>> {
+  const map: Record<string, number> = {};
+  for (let i = 0; i < serieIds.length; i += 100) {
+    const chunk = serieIds.slice(i, i + 100);
+    const result = await withServiceErr(() =>
+      tablesDb.listRows<UserSeriesStatsRow>({
+        databaseId: APPWRITE_DATABASE_ID,
+        tableId: TABLE.userSeriesStats,
+        queries: [Query.equal("serieId", chunk), Query.greaterThan("owned", 0), Query.limit(chunk.length)],
+        total: false,
+      })
+    );
+    for (const row of result.rows ?? []) map[row.serieId] = row.owned;
+  }
+  return map;
+}
+
+/** Uma série pelo id; `null` quando não existe (404). */
+export async function getSerie(id: string): Promise<SerieWithCount | null> {
+  try {
+    const row = await withServiceErr(() =>
+      tablesDb.getRow<SeriesRow>({
+        databaseId: APPWRITE_DATABASE_ID,
+        tableId: TABLE.series,
+        rowId: id,
+      })
+    );
+    return seriesRowToSerie(row);
+  } catch (err) {
+    if (isNotFound(err)) return null;
+    throw err;
+  }
+}
+
+/** Séries por id (até 100 por consulta), para as linhas de progresso. */
+export async function getSeriesByIds(ids: string[]): Promise<SerieWithCount[]> {
+  const out: SerieWithCount[] = [];
+  for (let i = 0; i < ids.length; i += 100) {
+    const chunk = ids.slice(i, i + 100);
+    const result = await withServiceErr(() =>
+      tablesDb.listRows<SeriesRow>({
+        databaseId: APPWRITE_DATABASE_ID,
+        tableId: TABLE.series,
+        queries: [Query.equal("$id", chunk), Query.limit(chunk.length)],
+      })
+    );
+    out.push(...(result.rows ?? []).map(seriesRowToSerie));
+  }
+  return out;
+}
+
+/**
+ * Todos os carros de uma série, pela posição (`seriePositionNum`
+ * crescente); sem posição vão ao fim, por título (`10-series.md` §B.1).
+ * Lê em páginas de 100 (uma série tem poucas dezenas de carros).
+ */
+export async function listAllCarsBySerie(serieId: string): Promise<CarListItem[]> {
+  const rows: CarRow[] = [];
+  let cursor: string | null = null;
+  for (;;) {
+    const queries: string[] = [
+      Query.equal("serieId", serieId),
+      Query.orderAsc("seriePositionNum"),
+      Query.orderAsc("title"),
+      Query.limit(100),
+    ];
+    if (cursor) queries.push(Query.cursorAfter(cursor));
+    const result = await withServiceErr(() =>
+      tablesDb.listRows<CarRow>({
+        databaseId: APPWRITE_DATABASE_ID,
+        tableId: TABLE.cars,
+        queries,
+        total: false,
+      })
+    );
+    const page = result.rows ?? [];
+    rows.push(...page);
+    if (page.length < 100) break;
+    cursor = page[page.length - 1].$id;
+  }
+  rows.sort((a, b) => {
+    const pa = a.seriePositionNum;
+    const pb = b.seriePositionNum;
+    const hasA = typeof pa === "number";
+    const hasB = typeof pb === "number";
+    if (hasA && hasB && pa !== pb) return (pa as number) - (pb as number);
+    if (hasA !== hasB) return hasA ? -1 : 1;
+    return a.title.localeCompare(b.title);
+  });
+  return rows.map(carRowToListItem);
+}
+
 /** Mantida por compatibilidade. */
 export async function listFeaturedSeries(): Promise<Serie[]> {
   return listSeries({ featured: true });
@@ -479,7 +628,8 @@ export async function getSeriesCarCount(): Promise<Record<string, number>> {
 /*                          HELPERS PRIVADOS                           */
 /* ================================================================== */
 
-async function getCatalogTotalCars(): Promise<number> {
+/** Total de carros do catálogo (`catalog_meta.totalCars`). */
+export async function getCatalogTotalCars(): Promise<number> {
   const result = await withServiceErr(() =>
     tablesDb.listRows<CatalogMetaRow>({
       databaseId: APPWRITE_DATABASE_ID,

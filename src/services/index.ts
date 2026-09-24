@@ -10,6 +10,12 @@
 export {
   countCars,
   getCarById,
+  getCatalogTotalCars,
+  getOwnedBySerie,
+  getSerie,
+  getSeriesByIds,
+  listAllCarsBySerie,
+  listSeriesPaged,
   getSeriesCarCount,
   listAttributes,
   listBrands,
@@ -21,13 +27,27 @@ export {
   listSeries,
   listYears,
 } from "./catalog";
-export type { ListCarsPagedOptions, PaginatedCars } from "./catalog";
+export type {
+  ListCarsPagedOptions,
+  PaginatedCars,
+  PaginatedSeries,
+  SerieListItem,
+  SerieWithCount,
+} from "./catalog";
+
+export {
+  getSeriesProgress,
+  getStatsSummary,
+  getYearProgress,
+} from "./stats";
+export type { SerieProgress, StatsSummary, YearProgress } from "./stats";
 
 export {
   addToCollection,
   getCollection,
   getCollectionQuantity,
   getCollectionSummary,
+  getSerieOwnership,
   removeFromCollection,
   setCollectionQuantity,
 } from "./collection";

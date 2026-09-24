@@ -3,7 +3,6 @@ import { ActivityIndicator, Pressable, RefreshControl, ScrollView, View } from "
 import { FlashList } from "@shopify/flash-list";
 import { useRouter } from "expo-router";
 import { ChevronRight, Search } from "lucide-react-native";
-import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/theme/ThemeProvider";
 import { getSeriesCarCount, listCarsPaged, listSeries } from "@/services";
@@ -12,6 +11,7 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useDelayedFlag } from "@/hooks/useDelayedFlag";
 import { useGridLayout } from "@/hooks/useGridColumns";
 import { useCollectionStore } from "@/hooks/useCollectionStore";
+import { useCollectionHeart } from "@/hooks/useCollectionHeart";
 import { ScreenContainer } from "@/components/ui/ScreenContainer";
 import { Header } from "@/components/ui/Header";
 import { ThemeScope } from "@/components/ui/ThemeScope";
@@ -21,7 +21,6 @@ import { SearchBar } from "@/components/ui/SearchBar";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
-import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { CarCard } from "@/components/car/CarCard";
 import { CarGridSkeleton } from "@/components/car/CarCardSkeleton";
 import { SeriesCard } from "@/components/car/SeriesCard";
@@ -59,7 +58,6 @@ export default function Home() {
   const [gridState, setGridState] = useState<GridState>("loading");
   const [gridError, setGridError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [confirmRemove, setConfirmRemove] = useState<CarListItem | null>(null);
 
   const showSeriesSkeleton = useDelayedFlag(seriesState === "loading", 150);
   const showCarsSkeleton = useDelayedFlag(gridState === "loading", 150);
@@ -130,55 +128,7 @@ export default function Home() {
     void loadCarsPage(carsCursor, false);
   };
 
-  const handleToggleCollection = useCallback(
-    async (car: CarListItem) => {
-      const wasIn = (collection.items[car.id] ?? 0) > 0;
-      const currentQty = collection.items[car.id] ?? 0;
-      // Se vai remover e quantity > 1, pede confirmação antes.
-      if (wasIn && currentQty > 1) {
-        setConfirmRemove(car);
-        return;
-      }
-      try {
-        await collection.toggle(car.id);
-        if (!wasIn) {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
-          show({
-            type: "success",
-            message: "Adicionada à sua coleção.",
-            action: { label: "Ver", onPress: () => router.navigate("/colecao") },
-          });
-        } else {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => undefined);
-        }
-      } catch {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => undefined);
-        show({ type: "danger", message: "Não foi possível atualizar sua coleção." });
-      }
-    },
-    [collection, show, router]
-  );
-
-  const handleConfirmRemoveAll = useCallback(async () => {
-    if (!confirmRemove) return;
-    const car = confirmRemove;
-    const previousQty = collection.items[car.id] ?? 0;
-    setConfirmRemove(null);
-    try {
-      await collection.remove(car.id);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => undefined);
-      show({
-        type: "info",
-        message: `Removidas ${previousQty} unidades da sua coleção.`,
-        action: {
-          label: "Desfazer",
-          onPress: () => collection.setQuantity(car.id, previousQty).catch(() => undefined),
-        },
-      });
-    } catch {
-      show({ type: "danger", message: "Não foi possível atualizar sua coleção." });
-    }
-  }, [confirmRemove, collection, show]);
+  const heart = useCollectionHeart();
 
   const headerFirstName = useMemo(() => {
     if (!user?.name) return null;
@@ -222,7 +172,7 @@ export default function Home() {
               width={grid.itemWidth}
               inCollection={(collection.items[item.id] ?? 0) > 0}
               onPress={() => router.push(`/car/${item.id}`)}
-              onToggleCollection={() => handleToggleCollection(item)}
+              onToggleCollection={() => heart.onToggle(item)}
             />
           </View>
         )}
@@ -234,8 +184,8 @@ export default function Home() {
             seriesCount={seriesCount}
             onRetrySeries={loadSeries}
             onSearchPress={() => router.push("/busca?focus=1")}
-            onSeriesPress={(id) => router.push(`/busca?serie=${id}`)}
-            onAllSeriesPress={() => router.push("/busca?open=serie")}
+            onSeriesPress={(id) => router.push(`/serie/${id}`)}
+            onAllSeriesPress={() => router.navigate("/series")}
             collectionCount={collectionCount}
             showSeriesSkeleton={showSeriesSkeleton}
           />
@@ -261,17 +211,7 @@ export default function Home() {
           ) : null
         }
       />
-      <ConfirmDialog
-        open={confirmRemove !== null}
-        onClose={() => setConfirmRemove(null)}
-        title={`Remover todas as ${collection.items[confirmRemove?.id ?? ""] ?? 0} unidades?`}
-        description={
-          confirmRemove
-            ? `${confirmRemove.title} sai completamente da sua coleção.`
-            : undefined
-        }
-        onConfirm={handleConfirmRemoveAll}
-      />
+      {heart.confirmDialog}
     </ScreenContainer>
   );
 }

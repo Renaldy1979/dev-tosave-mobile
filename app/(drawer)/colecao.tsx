@@ -6,7 +6,7 @@ import {
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import Animated from "react-native-reanimated";
-import { ArrowDownUp, ChevronDown, ExternalLink, Share2, Trash2 } from "lucide-react-native";
+import { ArrowDownUp, ChevronDown, ChevronRight, ExternalLink, Share2, Trash2 } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/theme/ThemeProvider";
@@ -290,6 +290,22 @@ export default function Colecao() {
                 onPress={() => router.setParams({ dup: duplicatesOnly ? undefined : "1" })}
                 accessibilityLabel={`${summary.duplicates} modelos repetidos, toque para filtrar`}
               />
+            </View>
+            {/* Link para Estatísticas (11-estatisticas §6); some com o resumo. */}
+            <View className="items-end">
+              <Pressable
+                accessibilityRole="link"
+                accessibilityLabel="Ver estatísticas"
+                onPress={() => router.navigate("/estatisticas")}
+                hitSlop={8}
+                className="flex-row items-center gap-1 active:opacity-70"
+                style={{ minHeight: 44 }}
+              >
+                <Text variant="body-sm" tone="primary" className="font-sans-medium">
+                  Ver estatísticas
+                </Text>
+                <ChevronRight size={16} color={c("primary-text")} strokeWidth={1.75} />
+              </Pressable>
             </View>
           </View>
         ) : null}

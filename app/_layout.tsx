@@ -71,6 +71,14 @@ export default function RootLayout() {
                       fullScreenGestureEnabled: true,
                     }}
                   />
+                  <Stack.Screen
+                    name="serie/[id]"
+                    options={{
+                      animation: "slide_from_right",
+                      gestureEnabled: true,
+                      fullScreenGestureEnabled: true,
+                    }}
+                  />
                 </Stack>
                 <AuthGate />
               </CollectionProvider>
@@ -84,7 +92,7 @@ export default function RootLayout() {
 
 /**
  * AuthGate — redireciona para `/login` quando a sessão cai enquanto
- * o usuário está numa rota protegida ((drawer) ou car/[id]). O splash
+ * o usuário está numa rota protegida ((drawer), car/[id] ou serie/[id]). O splash
  * (`app/index.tsx`) já cuida da entrada inicial; o cadasto
  * (`/cadastro`) também fica acessível sem sessão.
  */
@@ -96,11 +104,11 @@ function AuthGate() {
   useEffect(() => {
     if (user) return;
     const top = segments[0];
-    // Rotas que exigem sessão: (drawer) e detalhe do carro. `/login`,
+    // Rotas que exigem sessão: (drawer), detalhe do carro e tela da série. `/login`,
     // `/cadastro`, `/onboarding` e `/` (splash) ficam acessíveis
     // sem sessão para que o usuário possa entrar ou criar conta.
     const protectedRoute =
-      top === "(drawer)" || top === "car";
+      top === "(drawer)" || top === "car" || top === "serie";
     if (protectedRoute) {
       // 401 durante o uso → Login com o aviso "Sua sessão expirou.".
       router.replace(
