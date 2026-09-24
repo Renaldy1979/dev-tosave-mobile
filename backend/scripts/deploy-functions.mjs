@@ -52,6 +52,16 @@ const FUNCTIONS = [
     logging: true,
     scopes: ["rows.read", "rows.write"],
   },
+  {
+    functionId: "serie-progress",
+    name: "serie-progress",
+    execute: ["users"],
+    events: [],
+    schedule: "",
+    timeout: 15,
+    logging: false,
+    scopes: ["rows.read"],
+  },
 ];
 
 const only = process.argv.slice(2);

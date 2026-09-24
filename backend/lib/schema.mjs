@@ -53,6 +53,8 @@ export const TABLES = [
     indexes: [
       { key: "idx_default_title", type: "key", columns: ["isDefault", "title"] },
       { key: "idx_title", type: "key", columns: ["title"] },
+      // Busca por título na tela Séries (Query.search).
+      { key: "ft_title", type: "fulltext", columns: ["title"] },
     ],
   },
   {
@@ -152,6 +154,9 @@ export const TABLES = [
       { key: "idx_user_title", type: "key", columns: ["userId", "carTitle"] },
       { key: "idx_car", type: "key", columns: ["carId"] },
       { key: "ft_search", type: "fulltext", columns: ["searchText"] },
+      // Progresso por série (serie-progress) e reparo das estatísticas.
+      { key: "idx_user_serie", type: "key", columns: ["userId", "serieId"] },
+      { key: "idx_user_year", type: "key", columns: ["userId", "carYear"] },
     ],
   },
   {
@@ -165,6 +170,60 @@ export const TABLES = [
       int("duplicates", { min: 0, xdefault: 0 }),
     ],
     indexes: [],
+  },
+  {
+    // Modelos possuídos por série (1 por modelo, sem contar quantity).
+    // $id = "us_" + sha256(userId:serieId)[0:32]; só a Function collection escreve.
+    id: "user_series_stats",
+    name: "User series stats",
+    permissions: ownerOnlyPermissions,
+    rowSecurity: true,
+    columns: [
+      str("userId", 36, { required: true }),
+      str("serieId", 36, { required: true }),
+      int("owned", { min: 0, xdefault: 0 }),
+      // Desnormalizados para ordenar/paginar por progresso no servidor.
+      // pct = min(1000, round(owned / serieCarCount * 1000)) — em milésimos.
+      int("serieCarCount", { min: 0, xdefault: 0 }),
+      int("pct", { min: 0, max: 1000, xdefault: 0 }),
+      // Ordenação "Nome" e desempate de "Maior %" na tela Estatísticas.
+      str("serieTitle", 120, { xdefault: "" }),
+    ],
+    indexes: [
+      { key: "uq_user_serie", type: "unique", columns: ["userId", "serieId"] },
+      { key: "idx_user_owned", type: "key", columns: ["userId", "owned"], orders: ["asc", "desc"] },
+      { key: "idx_user_pct", type: "key", columns: ["userId", "pct", "owned"], orders: ["asc", "desc", "desc"] },
+      // catalog-sync: atualizar o progresso de todos quando o carCount da série muda.
+      { key: "idx_serie", type: "key", columns: ["serieId"] },
+      { key: "idx_user_title", type: "key", columns: ["userId", "serieTitle"] },
+    ],
+  },
+  {
+    // Modelos possuídos por ano. $id = "uy_" + sha256(userId:year)[0:32].
+    id: "user_year_stats",
+    name: "User year stats",
+    permissions: ownerOnlyPermissions,
+    rowSecurity: true,
+    columns: [
+      str("userId", 36, { required: true }),
+      int("year", { required: true, min: 1900, max: 2100 }),
+      int("owned", { min: 0, xdefault: 0 }),
+    ],
+    indexes: [
+      { key: "uq_user_year", type: "unique", columns: ["userId", "year"] },
+    ],
+  },
+  {
+    // Total de carros do catálogo por ano. $id = "y<ano>"; mantida pela catalog-sync.
+    id: "year_counts",
+    name: "Year counts",
+    permissions: catalogPermissions,
+    rowSecurity: false,
+    columns: [
+      int("year", { required: true, min: 1900, max: 2100 }),
+      int("carCount", { min: 0, xdefault: 0 }),
+    ],
+    indexes: [{ key: "idx_year", type: "key", columns: ["year"], orders: ["desc"] }],
   },
 ];
 

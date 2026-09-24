@@ -27,7 +27,9 @@ export default async ({ req, res, log }) => {
     .setKey(req.headers["x-appwrite-key"]);
   const db = new TablesDB(client);
 
-  await db.deleteRows({ databaseId: DATABASE_ID, tableId: "collection_items", queries: [Query.equal("userId", userId)] });
+  for (const tableId of ["collection_items", "user_series_stats", "user_year_stats"]) {
+    await db.deleteRows({ databaseId: DATABASE_ID, tableId, queries: [Query.equal("userId", userId)] });
+  }
   await db.deleteRow({ databaseId: DATABASE_ID, tableId: "user_stats", rowId: userId }).catch((err) => {
     if (err.code !== 404) throw err;
   });

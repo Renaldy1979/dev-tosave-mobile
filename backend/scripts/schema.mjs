@@ -73,7 +73,9 @@ async function ensureColumns(def) {
   for (const col of def.columns) {
     const found = existing.get(col.key);
     if (found) {
-      if (found.type !== col.kind || (col.size && found.size !== col.size) || Boolean(found.array) !== Boolean(col.array)) {
+      // O Appwrite reporta enum como type "string" + format "enum".
+      const foundKind = found.format === "enum" ? "enum" : found.type;
+      if (foundKind !== col.kind || (col.size && found.size !== col.size) || Boolean(found.array) !== Boolean(col.array)) {
         log(`! ${def.id}.${col.key} existe com definição diferente (${found.type}/${found.size ?? "-"}); não alterado`);
       }
       continue;

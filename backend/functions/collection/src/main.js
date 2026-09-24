@@ -25,9 +25,18 @@ function readJson(req) {
 }
 const MAX_QUANTITY = 99;
 
+const hash32 = (text) => createHash("sha256").update(text).digest("hex").slice(0, 32);
+
 export function collectionRowId(userId, carId) {
-  return "ci_" + createHash("sha256").update(`${userId}:${carId}`).digest("hex").slice(0, 32);
+  return "ci_" + hash32(`${userId}:${carId}`);
 }
+
+/** Progresso da série em milésimos, travado em 1000 (carro órfão não passa de 100%). */
+export const seriePct = (owned, carCount) => (carCount > 0 ? Math.min(1000, Math.round((owned * 1000) / carCount)) : 0);
+
+/** Linhas de estatística por série e por ano (ids determinísticos). */
+export const serieStatsRowId = (userId, serieId) => "us_" + hash32(`${userId}:${serieId}`);
+export const yearStatsRowId = (userId, year) => "uy_" + hash32(`${userId}:${year}`);
 
 async function getRowOrNull(tablesDB, tableId, rowId) {
   try {
@@ -113,6 +122,26 @@ export default async ({ req, res, error }) => {
     duplicates: (newQty > 1 ? 1 : 0) - (oldQty > 1 ? 1 : 0),
   };
 
+  // Modelo entrou (+1) ou saiu (-1): ajusta também série e ano. A série e o
+  // ano vêm do carro (entrada) ou da linha desnormalizada (saída).
+  const modelDelta = deltas.totalModels;
+  const serieId = car?.serieId ?? existing?.serieId;
+  const year = car?.year ?? existing?.carYear;
+  const breakdown = [];
+  if (modelDelta !== 0 && serieId) {
+    const serieTitle = car?.serieTitle ?? existing?.serieTitle ?? "";
+    breakdown.push({ tableId: "user_series_stats", rowId: serieStatsRowId(userId, serieId), data: { userId, serieId, owned: 0, serieTitle } });
+  }
+  if (modelDelta !== 0 && year) {
+    breakdown.push({ tableId: "user_year_stats", rowId: yearStatsRowId(userId, year), data: { userId, year, owned: 0 } });
+  }
+  // Garante as linhas antes da transação (o incremento exige linha existente).
+  for (const b of breakdown) {
+    if (!(await getRowOrNull(tablesDB, b.tableId, b.rowId))) {
+      await tablesDB.upsertRow({ databaseId: DATABASE_ID, tableId: b.tableId, rowId: b.rowId, data: b.data, permissions: ownerRead });
+    }
+  }
+
   const tx = await tablesDB.createTransaction({ ttl: 60 });
   const transactionId = tx.$id;
   try {
@@ -132,11 +161,32 @@ export default async ({ req, res, error }) => {
         await tablesDB.decrementRowColumn({ databaseId: DATABASE_ID, tableId: "user_stats", rowId: userId, column, value: -delta, min: 0, transactionId });
       }
     }
+    for (const b of breakdown) {
+      const params = { databaseId: DATABASE_ID, tableId: b.tableId, rowId: b.rowId, column: "owned", value: 1, transactionId };
+      if (modelDelta > 0) await tablesDB.incrementRowColumn(params);
+      else await tablesDB.decrementRowColumn({ ...params, min: 0 });
+    }
     await tablesDB.updateTransaction({ transactionId, commit: true });
   } catch (err) {
     error(`collection ${action} falhou: ${err.message}`);
     await tablesDB.updateTransaction({ transactionId, rollback: true }).catch(() => {});
     return res.json({ error: "unknown" }, 500);
+  }
+
+  // pct/serieCarCount da série, recalculados do `owned` já commitado: com
+  // toques concorrentes, o último a rodar converge para o valor certo.
+  const serieRow = breakdown.find((b) => b.tableId === "user_series_stats");
+  if (serieRow) {
+    const [stat, serie] = await Promise.all([
+      getRowOrNull(tablesDB, "user_series_stats", serieRow.rowId),
+      getRowOrNull(tablesDB, "series", serieId),
+    ]);
+    const serieCarCount = serie?.carCount ?? 0;
+    const serieTitle = serie?.title ?? stat?.serieTitle ?? "";
+    const pct = seriePct(stat?.owned ?? 0, serieCarCount);
+    if (stat && (stat.pct !== pct || stat.serieCarCount !== serieCarCount || stat.serieTitle !== serieTitle)) {
+      await tablesDB.updateRow({ databaseId: DATABASE_ID, tableId: "user_series_stats", rowId: serieRow.rowId, data: { pct, serieCarCount, serieTitle } });
+    }
   }
 
   const [item, summary] = await Promise.all([

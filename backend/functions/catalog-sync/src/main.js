@@ -1,7 +1,7 @@
 /**
  * Function `catalog-sync` — mantém os derivados do catálogo:
  * - `series.carCount` e `brands.carCount`;
- * - `catalog_meta` (totalCars, years);
+ * - `catalog_meta` (totalCars, years) e `year_counts` (carros por ano);
  * - campos desnormalizados em `cars` (brandName, serieTitle) e em
  *   `collection_items` (car*, brandName, serieTitle).
  *
@@ -60,16 +60,19 @@ async function updateIfChanged(db, tableId, row, data) {
 async function fullRecount(db, log) {
   const bySerie = new Map();
   const byBrand = new Map();
-  const years = new Set();
+  const byYear = new Map();
   let total = 0;
   for await (const car of scan(db, "cars", [Query.select(["$id", "serieId", "brandId", "year"])])) {
     total++;
     bySerie.set(car.serieId, (bySerie.get(car.serieId) ?? 0) + 1);
     byBrand.set(car.brandId, (byBrand.get(car.brandId) ?? 0) + 1);
-    years.add(car.year);
+    byYear.set(car.year, (byYear.get(car.year) ?? 0) + 1);
   }
+  const years = new Set(byYear.keys());
   let changed = 0;
+  const serieTitles = new Map();
   for await (const serie of scan(db, "series")) {
+    serieTitles.set(serie.$id, serie.title);
     if (await updateIfChanged(db, "series", serie, { carCount: bySerie.get(serie.$id) ?? 0 })) changed++;
   }
   for await (const brand of scan(db, "brands")) {
@@ -79,7 +82,36 @@ async function fullRecount(db, log) {
     databaseId: DATABASE_ID, tableId: "catalog_meta", rowId: "global",
     data: { totalCars: total, years: [...years].sort((a, b) => b - a) },
   });
-  log(`recontagem: ${total} carros, ${changed} séries/marcas corrigidas`);
+  // Total por ano (tela Estatísticas). Ano que ficou sem carros vai a 0.
+  for await (const row of scan(db, "year_counts")) if (!byYear.has(row.year)) byYear.set(row.year, 0);
+  for (const [year, carCount] of byYear) {
+    if (await upsertYearCount(db, year, carCount)) changed++;
+  }
+  // Progresso dos usuários por série (serieCarCount/pct desnormalizados).
+  let pctFixed = 0;
+  for await (const stat of scan(db, "user_series_stats")) {
+    if (await refreshSeriePct(db, stat, bySerie.get(stat.serieId) ?? 0, serieTitles.get(stat.serieId))) pctFixed++;
+  }
+  log(`recontagem: ${total} carros, ${changed} séries/marcas/anos corrigidos, ${pctFixed} progressos de série`);
+}
+
+/** Progresso da série em milésimos, travado em 1000 (igual à Function collection). */
+const seriePct = (owned, carCount) => (carCount > 0 ? Math.min(1000, Math.round((owned * 1000) / carCount)) : 0);
+
+/** Atualiza serieCarCount/pct/serieTitle de uma linha de user_series_stats, só se mudou. */
+async function refreshSeriePct(db, stat, serieCarCount, serieTitle = stat.serieTitle) {
+  const pct = seriePct(stat.owned, serieCarCount);
+  if (stat.pct === pct && stat.serieCarCount === serieCarCount && stat.serieTitle === serieTitle) return false;
+  await db.updateRow({ databaseId: DATABASE_ID, tableId: "user_series_stats", rowId: stat.$id, data: { pct, serieCarCount, serieTitle } });
+  return true;
+}
+
+/** Grava year_counts/y<ano> só quando o valor muda. */
+async function upsertYearCount(db, year, carCount) {
+  const current = await db.getRow({ databaseId: DATABASE_ID, tableId: "year_counts", rowId: `y${year}` }).catch(() => null);
+  if (current && current.carCount === carCount) return false;
+  await db.upsertRow({ databaseId: DATABASE_ID, tableId: "year_counts", rowId: `y${year}`, data: { year, carCount } });
+  return true;
 }
 
 async function countWhere(db, tableId, column, value) {
@@ -90,7 +122,13 @@ async function countWhere(db, tableId, column, value) {
 async function recountSerieAndBrand(db, serieId, brandId) {
   if (serieId) {
     const serie = await db.getRow({ databaseId: DATABASE_ID, tableId: "series", rowId: serieId }).catch(() => null);
-    if (serie) await updateIfChanged(db, "series", serie, { carCount: await countWhere(db, "cars", "serieId", serieId) });
+    if (serie) {
+      const carCount = await countWhere(db, "cars", "serieId", serieId);
+      await updateIfChanged(db, "series", serie, { carCount });
+      for await (const stat of scan(db, "user_series_stats", [Query.equal("serieId", serieId)])) {
+        await refreshSeriePct(db, stat, carCount, serie.title);
+      }
+    }
   }
   if (brandId) {
     const brand = await db.getRow({ databaseId: DATABASE_ID, tableId: "brands", rowId: brandId }).catch(() => null);
@@ -121,6 +159,8 @@ export default async ({ req, res, log }) => {
   const [, , , tableId, , , action] = event.split(".");
   if (tableId === "cars") {
     await recountSerieAndBrand(db, row.serieId, row.brandId);
+    // Ano do carro (o ano antigo, se mudou, é corrigido na agenda diária).
+    if (row.year) await upsertYearCount(db, row.year, await countWhere(db, "cars", "year", row.year));
     if (action === "update") {
       await propagate(db, "collection_items", ["carId", row.$id], {
         carTitle: row.title, carToy: row.toy ?? "", carCollector: row.collector ?? "", carYear: row.year,
@@ -132,6 +172,7 @@ export default async ({ req, res, log }) => {
   } else if (tableId === "series" && action === "update") {
     await propagate(db, "cars", ["serieId", row.$id], { serieTitle: row.title });
     await propagate(db, "collection_items", ["serieId", row.$id], { serieTitle: row.title });
+    await propagate(db, "user_series_stats", ["serieId", row.$id], { serieTitle: row.title });
   } else if (tableId === "brands" && action === "update") {
     await propagate(db, "cars", ["brandId", row.$id], { brandName: row.name });
     await propagate(db, "collection_items", ["brandId", row.$id], { brandName: row.name });
