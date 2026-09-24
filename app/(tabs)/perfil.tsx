@@ -333,7 +333,7 @@ export default function Perfil() {
         description="Você continua podendo explorar as miniaturas, mas precisará entrar de novo para ver sua coleção."
         actions={[
           { label: "Sair", variant: "danger", loading: signOutLoading, onPress: handleSignOut },
-          { label: "Cancelar", variant: "ghost", onPress: () => setSignOutOpen(false) },
+          { label: "Cancelar", variant: "secondary", onPress: () => setSignOutOpen(false) },
         ]}
       />
 

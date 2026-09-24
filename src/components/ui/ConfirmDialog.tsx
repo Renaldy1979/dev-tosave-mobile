@@ -8,7 +8,7 @@ import { Dialog } from "./Dialog";
  *
  * Ícone `Trash2` em círculo `bg-flame-soft`, cor `flame`. Título e
  * texto configuráveis; ações "Confirmar" (`danger`, loading) e
- * "Cancelar" (`ghost`). Haptic `Warning` ao confirmar. Nunca usar
+ * "Cancelar" (`secondary`). Haptic `Warning` ao confirmar. Nunca usar
  * `Alert.alert` para isso.
  */
 type Props = {
@@ -54,7 +54,7 @@ export function ConfirmDialog({
       iconTone="flame"
       actions={[
         { label: confirmLabel, onPress: handleConfirm, variant: "danger", loading },
-        { label: cancelLabel, onPress: onClose, variant: "ghost" },
+        { label: cancelLabel, onPress: onClose, variant: "secondary" },
       ]}
     />
   );

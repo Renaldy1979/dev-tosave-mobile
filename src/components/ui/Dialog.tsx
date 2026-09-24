@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { BackHandler, Modal, Pressable, View } from "react-native";
+import { Modal, Pressable, View } from "react-native";
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -16,10 +16,14 @@ import { Button } from "./Button";
 /**
  * Dialog centralizado (componentes.md §9.1).
  *
- * RN `Modal` `transparent` `animationType="fade"` + `statusBarTranslucent`,
- * envolvido em `ThemeScope`. Backdrop `overlay/70`, toque fora fecha
- * (exceto em loading). Painel `rounded-xl bg-surface p-5` com entrada
- * escala 0.96 → 1 + fade (200 ms).
+ * RN `Modal` `transparent` `animationType="fade"` com
+ * `statusBarTranslucent` e `navigationBarTranslucent`: cobre o app
+ * inteiro, inclusive TabBar, status bar e barra de navegação do
+ * Android. Backdrop `ink` a 65% (cor explícita, igual nos dois temas),
+ * envolvido em `ThemeScope`. Tocar no backdrop ou o back do Android =
+ * `onClose` (Cancelar), exceto com uma ação em loading ou
+ * `dismissable={false}`. Painel `rounded-xl bg-surface p-5` com entrada
+ * escala 0.96 → 1.
  */
 type Action = {
   label: string;
@@ -53,35 +57,25 @@ export function Dialog({
 }: Props) {
   const insets = useSafeAreaInsets();
   const { c, scheme } = useTheme();
-  const opacity = useSharedValue(0);
   const scale = useSharedValue(0.96);
 
+  // O fade (backdrop + painel) é do próprio Modal; aqui só a escala.
   useEffect(() => {
-    if (open) {
-      opacity.value = withTiming(1, { duration: 200, easing: Easing.out(Easing.ease) });
-      scale.value = withTiming(1, { duration: 200, easing: Easing.out(Easing.ease) });
-    } else {
-      opacity.value = withTiming(0, { duration: 160 });
-      scale.value = withTiming(0.96, { duration: 160 });
-    }
-  }, [open, opacity, scale]);
+    scale.value = open
+      ? withTiming(1, { duration: 200, easing: Easing.out(Easing.ease) })
+      : 0.96;
+  }, [open, scale]);
 
-  // Back do Android
-  useEffect(() => {
-    if (!open || !dismissable) return;
-    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
-      onClose();
-      return true;
-    });
-    return () => sub.remove();
-  }, [open, dismissable, onClose]);
+  // Com uma ação em andamento, nem backdrop nem back do Android fecham.
+  const canDismiss = dismissable && !actions.some((a) => a.loading);
+  const requestClose = () => {
+    if (canDismiss) onClose();
+  };
 
   const sideBySide = actions.length === 2;
   const orderedActions = sideBySide ? [actions[1], actions[0]] : actions;
 
-  const backdropStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
   const panelStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value,
     transform: [{ scale: scale.value }],
   }));
 
@@ -96,22 +90,29 @@ export function Dialog({
     <Modal
       visible={open}
       transparent
-      animationType="none"
+      animationType="fade"
       statusBarTranslucent
-      onRequestClose={dismissable ? onClose : undefined}
+      navigationBarTranslucent
+      onRequestClose={requestClose}
     >
       <ThemeScope scheme={scheme}>
         <View
-          style={{ paddingTop: insets.top, paddingBottom: insets.bottom, paddingHorizontal: 24 }}
-          className="flex-1 items-center justify-center bg-overlay/70"
+          style={{
+            flex: 1,
+            alignItems: "center",
+            justifyContent: "center",
+            paddingTop: insets.top,
+            paddingBottom: insets.bottom,
+            paddingHorizontal: 24,
+            backgroundColor: c("ink", 0.65),
+          }}
         >
-          <Animated.View style={[backdropStyle, { position: "absolute", inset: 0 }]} pointerEvents="none" />
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Fechar diálogo"
-            onPress={dismissable ? onClose : undefined}
-            disabled={!dismissable}
-            style={{ position: "absolute", inset: 0 }}
+            accessibilityLabel="Cancelar"
+            onPress={requestClose}
+            disabled={!canDismiss}
+            style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0 }}
           />
           <Animated.View
             style={[panelStyle, { width: "100%", maxWidth: 400 }]}
