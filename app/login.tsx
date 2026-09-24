@@ -42,6 +42,9 @@ const SIGN_IN_ERROR: Record<SignInError, string> = {
  * - `email` → vem preenchido (ex.: a partir do Cadastro).
  * - `reason=expired` → banner "Sua sessão expirou. Entre novamente."
  * - `reason=created` → banner "Conta criada. Entre para continuar."
+ * - `reason=deleted` → banner "Sua conta foi excluída."
+ * - `reason=blocked` → banner de erro "Esta conta está desativada."
+ *   (conta bloqueada pelo admin com o app aberto).
  *
  * Com sessão ativa, vai direto para o app.
  */
@@ -65,13 +68,17 @@ export default function Login() {
       ? "Sua sessão expirou. Entre novamente."
       : params.reason === "created"
         ? "Conta criada. Entre para continuar."
-        : null;
+        : params.reason === "deleted"
+          ? "Sua conta foi excluída."
+          : null;
 
   const [email, setEmail] = useState(params.email ?? "");
   const [password, setPassword] = useState("");
   const [emailError, setEmailError] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
-  const [banner, setBanner] = useState<string | null>(null);
+  const [banner, setBanner] = useState<string | null>(
+    params.reason === "blocked" ? SIGN_IN_ERROR.blocked : null
+  );
   const [showInfo, setShowInfo] = useState(infoBanner !== null);
   const [submitting, setSubmitting] = useState(false);
   const emailRef = useRef<TextInput>(null);

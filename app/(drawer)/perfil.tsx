@@ -9,7 +9,7 @@ import {
 import {
   useRouter,
 } from "expo-router";
-import { Lock, LogOut, Moon, RotateCcw, Smartphone, Sun } from "lucide-react-native";
+import { Lock, LogOut, Moon, RotateCcw, Smartphone, Sun, Trash2 } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
 import Constants from "expo-constants";
 import Animated from "react-native-reanimated";
@@ -276,6 +276,16 @@ export default function Perfil() {
               onPress={() => setSignOutOpen(true)}
               showChevron={false}
               accessibilityHint="Encerra a sessão neste aparelho"
+            />
+          </View>
+          {/* Zona de perigo: grupo próprio, abaixo de Sair (§5.1). */}
+          <View className="rounded-lg bg-surface border border-border overflow-hidden mt-6">
+            <ListRow
+              icon={Trash2}
+              label="Excluir conta"
+              variant="danger"
+              onPress={() => router.push("/excluir-conta")}
+              accessibilityHint="Apaga sua conta e sua coleção para sempre"
             />
           </View>
         </View>

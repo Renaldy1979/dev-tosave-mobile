@@ -1,9 +1,12 @@
+import { ExecutionMethod } from "react-native-appwrite";
 import {
   account,
+  functions,
   withServiceError,
   ServiceError,
   setOnUnauthorized,
   AppwriteException,
+  type SessionEndReason,
   appwriteErrorInfo,
 } from "./_appwrite";
 import {
@@ -150,6 +153,56 @@ export async function changePassword(
   } catch (err) {
     return { ok: false, error: mapChangePasswordError(err) };
   }
+}
+
+/** Erros possíveis de `deleteAccount`. */
+export type DeleteAccountError = "wrong_password" | "rate_limited" | "network" | "unknown";
+
+/** Resultado de `deleteAccount`. */
+export type DeleteAccountResult = { ok: true } | { ok: false; error: DeleteAccountError };
+
+/**
+ * Exclui a conta (`07-perfil.md` §5.1) pela Function `account-delete`
+ * (síncrona, POST `{ password }`; o usuário vem da sessão). O servidor
+ * confere a senha e apaga, antes do 200, coleção, estatísticas, o
+ * usuário no Auth e todas as sessões.
+ *
+ * Status → erro: 401 wrong_password · 429 rate_limited · outros unknown.
+ * Resposta perdida (falha de rede ao executar): consulta `account.get()`;
+ * 401 = a conta já foi apagada → sucesso; se responder, a conta existe.
+ *
+ * Não limpa o estado local: quem chama navega para o Login e depois
+ * encerra a sessão local (nunca `deleteSession`, que daria 401).
+ */
+export async function deleteAccount(password: string): Promise<DeleteAccountResult> {
+  let execution: { responseStatusCode: number; responseBody: string };
+  try {
+    execution = await authCall(() =>
+      functions.createExecution({
+        functionId: "account-delete",
+        body: JSON.stringify({ password }),
+        async: false,
+        method: ExecutionMethod.POST,
+      })
+    );
+  } catch (err) {
+    if (isRateLimited(err)) return { ok: false, error: "rate_limited" };
+    if (!isNetwork(err)) return { ok: false, error: "unknown" };
+    // Resposta perdida: a conta pode ter sido apagada mesmo assim.
+    try {
+      await authCall(() => account.get());
+      return { ok: false, error: "network" };
+    } catch (checkErr) {
+      return appwriteErrorInfo(checkErr).status === 401
+        ? { ok: true }
+        : { ok: false, error: "network" };
+    }
+  }
+  const status = execution.responseStatusCode;
+  if (status >= 200 && status < 300) return { ok: true };
+  if (status === 401) return { ok: false, error: "wrong_password" };
+  if (status === 429) return { ok: false, error: "rate_limited" };
+  return { ok: false, error: "unknown" };
 }
 
 /**
@@ -367,10 +420,10 @@ export { subscribeSession as subscribeAuth } from "./_session";
  * chamar `account.deleteSession` (a sessão já morreu do lado do
  * servidor).
  */
-export function bindUnauthorizedHandler(handler: () => void) {
-  setOnUnauthorized(() => {
+export function bindUnauthorizedHandler(handler: (reason: SessionEndReason) => void) {
+  setOnUnauthorized((reason) => {
     silentSignOut();
-    handler();
+    handler(reason);
   });
 }
 

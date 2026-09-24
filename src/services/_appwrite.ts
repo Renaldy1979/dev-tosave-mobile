@@ -154,7 +154,10 @@ export function isNotFound(err: unknown): boolean {
   return status === 404 || type === "row_not_found" || type === "document_not_found";
 }
 
-type UnauthorizedHandler = () => void;
+/** Por que a sessão caiu: expirou/revogada, ou a conta foi bloqueada. */
+export type SessionEndReason = "expired" | "blocked";
+
+type UnauthorizedHandler = (reason: SessionEndReason) => void;
 
 let onUnauthorized: UnauthorizedHandler | null = null;
 
@@ -166,8 +169,8 @@ export function setOnUnauthorized(handler: UnauthorizedHandler | null) {
   onUnauthorized = handler;
 }
 
-function notifyUnauthorized() {
-  onUnauthorized?.();
+function notifyUnauthorized(reason: SessionEndReason) {
+  onUnauthorized?.(reason);
 }
 
 /**
@@ -180,8 +183,14 @@ export async function withServiceError<T>(fn: () => Promise<T>): Promise<T> {
   } catch (err) {
     if (err instanceof AppwriteException) {
       const code = err.code ?? 0;
+      // Conta bloqueada pelo admin (portal): 401 no Appwrite 1.8 e 403
+      // a partir do 1.9, sempre com `type` `user_blocked`.
+      if ((code === 401 || code === 403) && appwriteErrorInfo(err).type === "user_blocked") {
+        notifyUnauthorized("blocked");
+        throw new ServiceError("unauthorized", "Conta desativada.", err);
+      }
       if (code === 401) {
-        notifyUnauthorized();
+        notifyUnauthorized("expired");
         throw new ServiceError("unauthorized", "Sessão expirada.", err);
       }
       throw new ServiceError("unknown", err.message || "Erro do servidor.", err);

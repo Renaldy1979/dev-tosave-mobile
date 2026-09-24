@@ -71,6 +71,7 @@ export default function RootLayout() {
                       fullScreenGestureEnabled: true,
                     }}
                   />
+                  <Stack.Screen name="excluir-conta" />
                   <Stack.Screen
                     name="serie/[id]"
                     options={{
@@ -92,14 +93,14 @@ export default function RootLayout() {
 
 /**
  * AuthGate — redireciona para `/login` quando a sessão cai enquanto
- * o usuário está numa rota protegida ((drawer), car/[id] ou serie/[id]). O splash
+ * o usuário está numa rota protegida ((drawer), car/[id], serie/[id] ou excluir-conta). O splash
  * (`app/index.tsx`) já cuida da entrada inicial; o cadasto
  * (`/cadastro`) também fica acessível sem sessão.
  */
 function AuthGate() {
   const router = useRouter();
   const segments = useSegments();
-  const { user, sessionExpired } = useCurrentUser();
+  const { user, sessionEnd } = useCurrentUser();
 
   useEffect(() => {
     if (user) return;
@@ -108,14 +109,16 @@ function AuthGate() {
     // `/cadastro`, `/onboarding` e `/` (splash) ficam acessíveis
     // sem sessão para que o usuário possa entrar ou criar conta.
     const protectedRoute =
-      top === "(drawer)" || top === "car" || top === "serie";
+      top === "(drawer)" || top === "car" || top === "serie" || top === "excluir-conta";
     if (protectedRoute) {
-      // 401 durante o uso → Login com o aviso "Sua sessão expirou.".
+      // Sessão caiu durante o uso → Login com o aviso do motivo:
+      // reason=expired ("Sua sessão expirou.") ou reason=blocked
+      // ("Esta conta está desativada.").
       router.replace(
-        sessionExpired ? { pathname: "/login", params: { reason: "expired" } } : "/login"
+        sessionEnd ? { pathname: "/login", params: { reason: sessionEnd } } : "/login"
       );
     }
-  }, [user, sessionExpired, segments, router]);
+  }, [user, sessionEnd, segments, router]);
 
   return null;
 }

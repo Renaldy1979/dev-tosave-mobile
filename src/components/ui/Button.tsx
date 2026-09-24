@@ -41,6 +41,7 @@ type Props = {
   fullWidth?: boolean;
   onPress: () => void;
   accessibilityLabel?: string;
+  accessibilityHint?: string;
   className?: string;
 };
 
@@ -67,6 +68,7 @@ export function Button({
   fullWidth = false,
   onPress,
   accessibilityLabel,
+  accessibilityHint,
   className,
 }: Props) {
   const { c } = useTheme();
@@ -168,6 +170,7 @@ export function Button({
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={accessibilityLabel ?? label}
+          accessibilityHint={accessibilityHint}
           accessibilityState={accessibilityState}
           onPress={onPress}
           onPressIn={handlePressIn}
@@ -207,6 +210,7 @@ export function Button({
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={accessibilityLabel ?? label}
+          accessibilityHint={accessibilityHint}
         accessibilityState={accessibilityState}
         onPress={onPress}
         onPressIn={handlePressIn}

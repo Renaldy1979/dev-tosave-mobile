@@ -8,6 +8,7 @@ import {
   type SignInResult,
 } from "@/services/auth";
 import { silentSignOut } from "@/services/_session";
+import type { SessionEndReason } from "@/services/_appwrite";
 import type { User } from "@/types";
 
 /**
@@ -27,14 +28,17 @@ const listeners = new Set<Listener>();
 type Snapshot = {
   user: User | null;
   loading: boolean;
-  /** A sessão caiu por 401 (não por "Sair"): o Login mostra o aviso. */
-  sessionExpired: boolean;
+  /**
+   * Por que a sessão caiu durante o uso (não por "Sair"): o Login mostra
+   * "Sua sessão expirou." ou "Esta conta está desativada.".
+   */
+  sessionEnd: SessionEndReason | null;
 };
 
 let snapshot: Snapshot = {
   user: null,
   loading: true,
-  sessionExpired: false,
+  sessionEnd: null,
 };
 
 function emit() {
@@ -73,10 +77,10 @@ async function ensureBootstrap() {
   // Liga o callback de unauthorized — quando o Appwrite devolve 401
   // em qualquer chamada autenticada, o app volta ao Login. Ligar uma
   // vez só.
-  bindUnauthorizedHandler(() => {
+  bindUnauthorizedHandler((reason) => {
     silentSignOut();
-    // Só marca expirada se havia sessão (401 sem usuário não é expiração).
-    setSnapshot({ user: null, loading: false, sessionExpired: snapshot.user !== null });
+    // Só marca o motivo se havia sessão (401 sem usuário não é expiração).
+    setSnapshot({ user: null, loading: false, sessionEnd: snapshot.user !== null ? reason : null });
   });
 }
 
@@ -85,9 +89,9 @@ ensureBootstrap();
 async function refreshUser() {
   try {
     const user = await getCurrentUser();
-    setSnapshot({ user, loading: false, sessionExpired: user ? false : snapshot.sessionExpired });
+    setSnapshot({ user, loading: false, sessionEnd: user ? null : snapshot.sessionEnd });
   } catch {
-    setSnapshot({ user: null, loading: false, sessionExpired: snapshot.sessionExpired });
+    setSnapshot({ user: null, loading: false, sessionEnd: snapshot.sessionEnd });
   }
 }
 
@@ -97,14 +101,23 @@ async function signInAndSync(
 ): Promise<SignInResult> {
   const result = await serviceSignIn(email, password);
   if (result.ok) {
-    setSnapshot({ user: result.user, loading: false, sessionExpired: false });
+    setSnapshot({ user: result.user, loading: false, sessionEnd: null });
   }
   return result;
 }
 
 async function signOutAndSync() {
   await serviceSignOut();
-  setSnapshot({ user: null, loading: false, sessionExpired: false });
+  setSnapshot({ user: null, loading: false, sessionEnd: null });
+}
+
+/**
+ * Encerra só o estado local, sem chamada de rede: usado depois de
+ * excluir a conta, quando o servidor já derrubou todas as sessões.
+ */
+function endLocalSession() {
+  silentSignOut();
+  setSnapshot({ user: null, loading: false, sessionEnd: null });
 }
 
 // Encaminha o `subscribeAuth` do service para os listeners do store.
@@ -117,7 +130,9 @@ subscribeAuth(() => {
 export function useCurrentUser(): {
   user: User | null;
   loading: boolean;
-  sessionExpired: boolean;
+  sessionEnd: SessionEndReason | null;
+  /** Limpa a sessão só no app (ex.: após excluir a conta). */
+  endLocalSession: () => void;
   signIn: (email: string, password: string) => Promise<SignInResult>;
   signOut: () => Promise<void>;
   refresh: () => Promise<void>;
@@ -136,7 +151,8 @@ export function useCurrentUser(): {
   return {
     user: snap.user,
     loading: snap.loading,
-    sessionExpired: snap.sessionExpired,
+    sessionEnd: snap.sessionEnd,
+    endLocalSession,
     signIn: signInFn,
     signOut: signOutFn,
     refresh: refreshFn,
