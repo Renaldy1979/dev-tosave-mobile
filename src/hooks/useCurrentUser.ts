@@ -24,9 +24,17 @@ import type { User } from "@/types";
 
 type Listener = () => void;
 const listeners = new Set<Listener>();
-let snapshot: { user: User | null; loading: boolean } = {
+type Snapshot = {
+  user: User | null;
+  loading: boolean;
+  /** A sessão caiu por 401 (não por "Sair"): o Login mostra o aviso. */
+  sessionExpired: boolean;
+};
+
+let snapshot: Snapshot = {
   user: null,
   loading: true,
+  sessionExpired: false,
 };
 
 function emit() {
@@ -48,7 +56,7 @@ function getServerSnapshot() {
   return snapshot;
 }
 
-function setSnapshot(next: { user: User | null; loading: boolean }) {
+function setSnapshot(next: Snapshot) {
   if (next === snapshot) return;
   snapshot = next;
   emit();
@@ -67,7 +75,8 @@ async function ensureBootstrap() {
   // vez só.
   bindUnauthorizedHandler(() => {
     silentSignOut();
-    setSnapshot({ user: null, loading: false });
+    // Só marca expirada se havia sessão (401 sem usuário não é expiração).
+    setSnapshot({ user: null, loading: false, sessionExpired: snapshot.user !== null });
   });
 }
 
@@ -76,9 +85,9 @@ ensureBootstrap();
 async function refreshUser() {
   try {
     const user = await getCurrentUser();
-    setSnapshot({ user, loading: false });
+    setSnapshot({ user, loading: false, sessionExpired: user ? false : snapshot.sessionExpired });
   } catch {
-    setSnapshot({ user: null, loading: false });
+    setSnapshot({ user: null, loading: false, sessionExpired: snapshot.sessionExpired });
   }
 }
 
@@ -88,14 +97,14 @@ async function signInAndSync(
 ): Promise<SignInResult> {
   const result = await serviceSignIn(email, password);
   if (result.ok) {
-    setSnapshot({ user: result.user, loading: false });
+    setSnapshot({ user: result.user, loading: false, sessionExpired: false });
   }
   return result;
 }
 
 async function signOutAndSync() {
   await serviceSignOut();
-  setSnapshot({ user: null, loading: false });
+  setSnapshot({ user: null, loading: false, sessionExpired: false });
 }
 
 // Encaminha o `subscribeAuth` do service para os listeners do store.
@@ -108,6 +117,7 @@ subscribeAuth(() => {
 export function useCurrentUser(): {
   user: User | null;
   loading: boolean;
+  sessionExpired: boolean;
   signIn: (email: string, password: string) => Promise<SignInResult>;
   signOut: () => Promise<void>;
   refresh: () => Promise<void>;
@@ -126,6 +136,7 @@ export function useCurrentUser(): {
   return {
     user: snap.user,
     loading: snap.loading,
+    sessionExpired: snap.sessionExpired,
     signIn: signInFn,
     signOut: signOutFn,
     refresh: refreshFn,

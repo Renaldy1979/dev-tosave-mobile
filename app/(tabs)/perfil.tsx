@@ -100,7 +100,8 @@ export default function Perfil() {
       await signOut();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
       setSignOutOpen(false);
-      router.replace("/(tabs)");
+      // Sem sessão o Login é a raiz; o voltar nunca reabre as tabs.
+      router.replace("/login");
     } catch {
       show({ type: "danger", message: "Não foi possível sair agora." });
     } finally {

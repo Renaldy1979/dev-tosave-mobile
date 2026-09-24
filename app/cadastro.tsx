@@ -9,7 +9,7 @@ import {
   View,
 } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
-import { Lock, Mail, User, X } from "lucide-react-native";
+import { ChevronLeft, Lock, Mail, User } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/theme/ThemeProvider";
@@ -229,16 +229,18 @@ export default function Cadastro() {
       {/* topo ink: logo + botão voltar. */}
       <View
         className="relative items-center justify-center overflow-hidden bg-ink"
-        style={{ height: 180, paddingTop: Platform.OS === "ios" ? 8 : insets.top + 8 }}
+        style={{ height: 180 + insets.top, paddingTop: insets.top }}
       >
-        <IconButton
-          icon={X}
-          variant="glass"
-          size="md"
-          accessibilityLabel="Voltar"
-          onPress={goBack}
-          className="absolute left-3"
-        />
+        <View className="absolute left-3" style={{ top: insets.top + 8 }}>
+          <IconButton
+            icon={ChevronLeft}
+            variant="glass"
+            size="md"
+            accessibilityLabel="Voltar"
+            onPress={goBack}
+            disabled={submitting}
+          />
+        </View>
         <Logo variant="dark" size="sm" />
       </View>
 

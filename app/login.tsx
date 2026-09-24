@@ -11,6 +11,7 @@ import {
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { AlertCircle, Info, Lock, Mail } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/theme/ThemeProvider";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import type { SignInError } from "@/services/auth";
@@ -48,6 +49,7 @@ export default function Login() {
   const router = useRouter();
   const params = useLocalSearchParams<{ email?: string; reason?: string }>();
   const { c } = useTheme();
+  const insets = useSafeAreaInsets();
   const { user, signIn } = useCurrentUser();
   const { show } = useToast();
 
@@ -124,12 +126,11 @@ export default function Login() {
 
   return (
     <ScreenContainer bg="ink" edges={["bottom"]} className="flex-1">
-      {/* topo ink: palco da logo + marca d'água (sem props que possam
-          causar layout 0-px em Modal pageSheet do iOS: scale, radius
-          9999, margins negativas). */}
+      {/* topo ink: palco da logo + marca d'água. Pinta a área da status
+          bar; o conteúdo começa em `insets.top`. */}
       <View
         className="relative items-center justify-center overflow-hidden bg-ink"
-        style={{ height: 220 }}
+        style={{ height: 220 + insets.top, paddingTop: insets.top }}
       >
         {/* gradiente radial primary/12 */}
         <View
@@ -147,7 +148,7 @@ export default function Login() {
         {/* marca d'água com largura limitada */}
         <View
           className="absolute items-center justify-center"
-          style={{ width: "100%", height: 220, opacity: 0.06 }}
+          style={{ width: "100%", height: 220, top: insets.top, opacity: 0.06 }}
         >
           <LogoCar width={260} />
         </View>

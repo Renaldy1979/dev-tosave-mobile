@@ -58,15 +58,10 @@ export default function RootLayout() {
                 <Stack screenOptions={{ headerShown: false }}>
                   <Stack.Screen name="index" />
                   <Stack.Screen name="onboarding" />
-                  <Stack.Screen
-                    name="login"
-                    options={{
-                      // Fase 2: tela cheia, não modal.
-                      presentation: "fullScreenModal",
-                      animation: "fade",
-                    }}
-                  />
-                  <Stack.Screen name="cadastro" options={{ presentation: "fullScreenModal", animation: "fade" }} />
+                  {/* Login: tela de stack normal e raiz quando não há sessão
+                      (sempre entra por `replace`; sem gesto de voltar). */}
+                  <Stack.Screen name="login" options={{ animation: "fade", gestureEnabled: false }} />
+                  <Stack.Screen name="cadastro" />
                   <Stack.Screen name="(tabs)" />
                   <Stack.Screen
                     name="car/[id]"
@@ -96,7 +91,7 @@ export default function RootLayout() {
 function AuthGate() {
   const router = useRouter();
   const segments = useSegments();
-  const { user } = useCurrentUser();
+  const { user, sessionExpired } = useCurrentUser();
 
   useEffect(() => {
     if (user) return;
@@ -107,9 +102,12 @@ function AuthGate() {
     const protectedRoute =
       top === "(tabs)" || top === "car";
     if (protectedRoute) {
-      router.replace("/login");
+      // 401 durante o uso → Login com o aviso "Sua sessão expirou.".
+      router.replace(
+        sessionExpired ? { pathname: "/login", params: { reason: "expired" } } : "/login"
+      );
     }
-  }, [user, segments, router]);
+  }, [user, sessionExpired, segments, router]);
 
   return null;
 }
