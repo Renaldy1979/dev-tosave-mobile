@@ -35,6 +35,21 @@ A fase 1 está entregue (tag `v0.1.0-fase1`). A fase 2 vem **antes** do portal w
 - O login simulado e os dados de `src/mocks/` são substituídos pelo Appwrite. Os mocks podem continuar existindo para desenvolvimento, mas nenhuma tela os usa.
 - Backend: código em `backend/` e especificação em `docs/ESPECIFICACAO-BACKEND.md`. É responsabilidade do agente **Alicerce**.
 
+### Upgrade do Appwrite — decisão do usuário (24/09/2026)
+
+- **Não atualizar agora.** Migrar só **depois de terminar o trabalho atual** no app. Análise completa em `docs/analise-upgrade-appwrite-2.2.md`.
+- **Caminho preferido:** uma instalação **nova do Appwrite 2.3+** pelo instalador oficial (sem o template do Easypanel, que está travado em 1.8), recarregada com os scripts de `backend/` (schema, migrate, upload-images, series-images, import-user, user-stats-backfill, deploy-functions). O 1.8.1 atual fica de pé como rollback.
+- **O que muda no app:** só o endpoint e o projectId no `app.json`.
+- **Pré-requisitos:**
+  - snapshot da VPS na Hostinger;
+  - RAM e disco suficientes para o ClickHouse;
+  - SDKs atualizados numa branch;
+  - `validate` + `validate-stats` + teste no Expo Go.
+- **Postgres:** o usuário quer a instalação nova em Postgres.
+  - Atenção: o motor do banco **não muda a API** do Appwrite, que até a 2.3 não tem SUM/GROUP BY.
+  - As tabelas de totais (user_stats, user_series_stats, user_year_stats) continuam necessárias, a menos que uma versão futura traga agregação na API.
+  - Reavaliar na hora da migração.
+
 ### Navegação futura — decisão do usuário (23/09/2026)
 
 - **As abas vão sair e dar lugar a um menu hambúrguer (drawer).** Motivo: qualquer funcionalidade nova entra no menu sem precisar inventar um atalho a cada vez.
