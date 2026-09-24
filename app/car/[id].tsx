@@ -18,6 +18,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/theme/ThemeProvider";
+import { attributeIcon } from "@/config/attributeIcons";
 // useCurrentUser removido na fase 2.
 import { useDelayedFlag } from "@/hooks/useDelayedFlag";
 import { useCollectionStore } from "@/hooks/useCollectionStore";
@@ -438,7 +439,13 @@ export default function CarDetalhe() {
                   hitSlop={10}
                   style={{ minHeight: 44, minWidth: 44, justifyContent: "center" }}
                 >
-                  <Badge variant="neutral" size="md" icon={Sparkles}>
+                  {/* T-Hunt: ícone próprio (neutral); STH em accent (componentes §5.1). */}
+                  <Badge
+                    variant={attributeIcon(attr)?.kind === "sthunt" ? "accent" : "neutral"}
+                    size="md"
+                    icon={attributeIcon(attr) ? undefined : Sparkles}
+                    imageIcon={attributeIcon(attr)?.source}
+                  >
                     {attr.title}
                   </Badge>
                 </Pressable>

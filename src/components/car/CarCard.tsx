@@ -1,4 +1,6 @@
 import { Pressable, View } from "react-native";
+import { Image } from "expo-image";
+import { huntIconForCar } from "@/config/attributeIcons";
 import { useTheme } from "@/theme/ThemeProvider";
 import { cn } from "@/utils/cn";
 import { Text } from "../ui/Text";
@@ -57,6 +59,8 @@ export function CarCard({
   width,
 }: Props) {
   const { scheme } = useTheme();
+  // T-Hunt / Super T-Hunt (componentes §5.1); com os dois, só o STH.
+  const hunt = huntIconForCar(car.attributeIds);
 
   if (variant === "row") {
     return (
@@ -73,9 +77,19 @@ export function CarCard({
           <Text variant="body-sm" className="font-sans-semibold mt-0.5" numberOfLines={2}>
             {car.title}
           </Text>
-          <Text variant="caption" tone="muted" className="font-mono mt-0.5">
-            {car.toy}
-          </Text>
+          <View className="flex-row items-center gap-1 mt-0.5">
+            {hunt ? (
+              <Image
+                source={hunt.source}
+                style={{ width: 16, height: 16 }}
+                contentFit="contain"
+                accessibilityLabel={hunt.spokenName}
+              />
+            ) : null}
+            <Text variant="caption" tone="muted" className="font-mono">
+              {car.toy}
+            </Text>
+          </View>
         </View>
         {onToggleCollection ? (
           <FavoriteButton
@@ -97,7 +111,8 @@ export function CarCard({
       : inCollection
         ? ", na sua coleção"
         : "";
-  const a11yLabel = `${car.title}, ${car.brandName}, ${car.year}, número ${car.collector}${collectionSuffix}`;
+  const huntSuffix = hunt ? `, ${hunt.spokenName}` : "";
+  const a11yLabel = `${car.title}, ${car.brandName}, ${car.year}, número ${car.collector}${huntSuffix}${collectionSuffix}`;
 
   return (
     <Pressable
@@ -138,6 +153,15 @@ export function CarCard({
             />
           ) : null}
         </View>
+        {/* T-Hunt / STH — canto inferior esquerdo, sobre círculo escuro */}
+        {hunt ? (
+          <View
+            className="absolute bottom-2 left-2 rounded-full bg-black/45 items-center justify-center"
+            style={{ width: 24, height: 24 }}
+          >
+            <Image source={hunt.source} style={{ width: 20, height: 20 }} contentFit="contain" />
+          </View>
+        ) : null}
         {/* serie position — canto inferior direito */}
         {car.seriePosition ? (
           <View className="absolute bottom-2 right-2">

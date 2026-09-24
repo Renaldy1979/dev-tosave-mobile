@@ -56,6 +56,8 @@ interface CollectionItemRow extends Models.Row {
   carScale: string;
   carSeriePosition?: string;
   carImageFileId?: string | null;
+  /** Atributos do carro, desnormalizados (ex.: T-Hunt). */
+  carAttributeIds?: string[];
   brandId: string;
   brandName: string;
   serieId: string;
@@ -99,6 +101,7 @@ function rowToCar(row: CollectionItemRow): {
   imagemFull: string | null;
   imagemThumb: string | null;
   seriePosition: string | null;
+  attributeIds: string[];
 } {
   return {
     id: row.carId,
@@ -120,6 +123,7 @@ function rowToCar(row: CollectionItemRow): {
       ? previewUrl(row.carImageFileId, 400, 75)
       : null,
     seriePosition: row.carSeriePosition ?? null,
+    attributeIds: row.carAttributeIds ?? [],
   };
 }
 

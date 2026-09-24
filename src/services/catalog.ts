@@ -121,6 +121,7 @@ export function carRowToListItem(row: CarRow): CarListItem {
       ? imageUrl(row.imageFileId, 400, 75)
       : null,
     seriePosition: row.seriePosition ?? null,
+    attributeIds: row.attributeIds ?? [],
     createdAt: row.$createdAt ?? "",
     updatedAt: row.$updatedAt ?? "",
   };

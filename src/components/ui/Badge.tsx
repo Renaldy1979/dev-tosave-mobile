@@ -1,4 +1,5 @@
-import { View } from "react-native";
+import { View, type ImageSourcePropType } from "react-native";
+import { Image } from "expo-image";
 import type { LucideIcon } from "lucide-react-native";
 import type { ReactNode } from "react";
 import { useTheme } from "@/theme/ThemeProvider";
@@ -30,6 +31,8 @@ type Props = {
   size?: "sm" | "md";
   children: ReactNode;
   icon?: LucideIcon;
+  /** Ícone em imagem (ex.: T-Hunt), no lugar de `icon`. 16 pt. */
+  imageIcon?: ImageSourcePropType;
   className?: string;
 };
 
@@ -65,6 +68,7 @@ export function Badge({
   size = "md",
   children,
   icon: Icon,
+  imageIcon,
   className,
 }: Props) {
   const { c } = useTheme();
@@ -90,7 +94,11 @@ export function Badge({
       )}
       style={{ height }}
     >
-      {Icon ? <Icon color={iconColor} size={14} strokeWidth={1.75} /> : null}
+      {imageIcon ? (
+        <Image source={imageIcon} style={{ width: 16, height: 16 }} contentFit="contain" />
+      ) : Icon ? (
+        <Icon color={iconColor} size={14} strokeWidth={1.75} />
+      ) : null}
       <Text
         variant="caption"
         tone={variantTone[variant]}

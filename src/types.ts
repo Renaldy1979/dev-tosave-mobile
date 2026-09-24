@@ -87,6 +87,8 @@ export interface Car {
   year: number;
   /** Escala do modelo (ex.: "1/64"). String para preservar formatação. */
   scale: string;
+  /** Ids dos atributos (ex.: T-Hunt). Opcional: nem toda leitura traz. */
+  attributeIds?: string[];
   createdAt: string;
   updatedAt: string;
 }
