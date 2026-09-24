@@ -60,6 +60,12 @@ A fase 1 está entregue (tag `v0.1.0-fase1`). A fase 2 vem **antes** do portal w
 
 - **Funcionalidades liberadas por perfil.** O usuário vai deixar **parceiros** entrarem no portal para cadastrar carros e ajudar a subir o banco. **Decidido: o que um parceiro cadastra ou edita passa por aprovação de um admin antes de aparecer no app.** **Parceiro:** cria carros e **só apaga os que ele mesmo criou**, e só se o carro não estiver em nenhuma coleção. Edição dos próprios carros também passa por aprovação (a confirmar com o usuário). Carros de outros e séries, marcas e atributos ficam com admin. A base (times e roles do Appwrite e permissões das tabelas) precisa ser preparada para isso antes de qualquer parceiro entrar.
 - **Importação automática de carros a partir de uma URL** que o usuário já usa como fonte, via script. Antes de automatizar, conferir os termos de uso e os direitos das imagens da fonte.
+- **Bloquear e desbloquear conta (só admin)**, pedido do usuário em 24/09/2026, pensando em escala e em monetização futura.
+  - No Appwrite: `users.updateStatus(userId, false)`. A conta bloqueada não consegue entrar, e o app já mostra "Esta conta está desativada.".
+  - Registrar no portal quem bloqueou, quando e o motivo (auditoria).
+  - Diferente de **excluir**: o bloqueio preserva a coleção e é reversível.
+  - Se o usuário for bloqueado com o app aberto, a próxima chamada falha com 401, e o app deve ir ao Login com a mensagem de conta desativada.
+  - **Monetização (futuro):** prever no modelo de usuário um campo de plano/assinatura (ex.: free/premium) e limites por plano, sem implementar agora.
 
 ### Obrigatório antes de publicar nas lojas (fora do escopo da fase 2, não pode ser esquecido)
 
