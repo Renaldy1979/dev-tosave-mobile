@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
-import { BackHandler, Pressable, View } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { BackHandler, Pressable, View, useWindowDimensions } from "react-native";
 import {
   BottomSheetBackdrop,
   BottomSheetModal,
@@ -30,7 +30,11 @@ type Props = {
   open: boolean;
   onClose: () => void;
   title?: string;
-  /** "dynamic" → `enableDynamicSizing`. Padrão `["55%", "90%"]`. */
+  /**
+   * "dynamic" → altura do conteúdo, medida por `onLayout` (não usa o
+   * `enableDynamicSizing` do @gorhom, que no build nativo mediu 0 e o
+   * sheet não aparecia). Padrão `["55%", "90%"]`.
+   */
   snapPoints?: (string | number)[] | "dynamic";
   footer?: React.ReactNode;
   /** `true` envolve o conteúdo em BottomSheetScrollView. */
@@ -59,11 +63,26 @@ export function BottomSheet({
 
   const isDynamic = snapPoints === "dynamic";
 
-  // Abre/fecha de acordo com `open`.
+  // Modo "dynamic": altura medida do conteúdo + alça (≈ 28 pt), limitada
+  // à tela. Até a primeira medida, abre em 50%.
+  const { height: screenHeight } = useWindowDimensions();
+  const [contentHeight, setContentHeight] = useState(0);
+  const dynamicSnapPoints = useMemo<(string | number)[]>(() => {
+    if (contentHeight <= 0) return ["50%"];
+    return [Math.min(contentHeight + 28, screenHeight - insets.top - 16)];
+  }, [contentHeight, screenHeight, insets.top]);
+
+  // Abre/fecha de acordo com `open`. `dismiss()` só com o sheet
+  // apresentado: chamado com o modal fechado (na montagem, ou depois de
+  // fechar pelo gesto/backdrop), o @gorhom fica em DISMISSING e o
+  // `present()` seguinte não renderiza nada.
+  const presented = useRef(false);
   useEffect(() => {
     if (open) {
+      presented.current = true;
       ref.current?.present();
-    } else {
+    } else if (presented.current) {
+      presented.current = false;
       ref.current?.dismiss();
     }
   }, [open]);
@@ -79,6 +98,12 @@ export function BottomSheet({
   }, [open, onClose]);
 
   const handleDismiss = useCallback(() => {
+    onClose();
+  }, [onClose]);
+
+  // O modal já fechou (gesto, backdrop ou `dismiss()`): só avisa o pai.
+  const handleModalDismiss = useCallback(() => {
+    presented.current = false;
     onClose();
   }, [onClose]);
 
@@ -110,9 +135,9 @@ export function BottomSheet({
   return (
     <BottomSheetModal
       ref={ref}
-      snapPoints={isDynamic ? undefined : resolvedSnapPoints}
-      enableDynamicSizing={isDynamic}
-      onDismiss={handleDismiss}
+      snapPoints={isDynamic ? dynamicSnapPoints : resolvedSnapPoints}
+      enableDynamicSizing={false}
+      onDismiss={handleModalDismiss}
       handleIndicatorStyle={{
         backgroundColor: c("fg-subtle"),
         opacity: 0.4,
@@ -126,10 +151,16 @@ export function BottomSheet({
       keyboardBehavior="interactive"
       android_keyboardInputMode="adjustResize"
     >
-      <ThemeScope scheme={scheme}>
-        {/* `flex: 1` quebra o modo `dynamic` do @gorhom. */}
+      {/* Fixo: `flex-1` (sem ele o ThemeScope encolhe e o conteúdo some).
+          Dinâmico: altura do conteúdo, medida por `onLayout`. */}
+      <ThemeScope scheme={scheme} className={isDynamic ? undefined : "flex-1"}>
         {isDynamic ? (
-          <BottomSheetView>
+          <BottomSheetView
+            onLayout={(e) => {
+              const h = Math.ceil(e.nativeEvent.layout.height);
+              if (h > 0 && Math.abs(h - contentHeight) > 1) setContentHeight(h);
+            }}
+          >
             {header}
             {children}
             {footer ? (

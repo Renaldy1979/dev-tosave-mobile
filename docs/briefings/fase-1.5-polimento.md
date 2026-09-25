@@ -57,3 +57,7 @@ Pendências que o Forja registrou como evolução em `lote-02-revisao-design.md`
 - **28:** rótulo da ordem atual; ícone `Check` no sheet.
 - **33:** trocar o polling de 80 ms do Header por `useAnimatedReaction`.
 - **34–46:** todo o POLIMENTO.
+
+## Correções anotadas em 25/09/2026 (fase 1: fazer antes do próximo lote)
+
+- **Perfil → Sair:** o diálogo com Sair e Cancelar aparece no topo da página. Ele tem de ficar centralizado e por cima da tela toda, com fundo escurecido. O ícone de sair que aparece junto não faz sentido do jeito que está: tirar ou rever com a Aquarela. Em 23/09 isso tinha sido validado; conferir se a v2 ou o build de desenvolvimento trouxeram a regressão.

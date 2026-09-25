@@ -1,6 +1,5 @@
 import { useCallback } from "react";
 import { useRouter } from "expo-router";
-import { LogOut } from "lucide-react-native";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { useToast } from "@/components/ui/Toast";
@@ -32,7 +31,7 @@ export function SignOutDialog({ open, onClose }: { open: boolean; onClose: () =>
     <ConfirmDialog
       open={open}
       onClose={onClose}
-      icon={LogOut}
+      icon={null}
       title="Sair da sua conta?"
       description="Você vai precisar entrar de novo para ver sua coleção."
       confirmLabel="Sair"

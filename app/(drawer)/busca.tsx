@@ -225,7 +225,9 @@ export default function Busca() {
 
   // ----- Coleção (store compartilhado) -----
   const collection = useCollectionStore();
-  const isInCollection = (carId: string) => (collection.items[carId] ?? 0) > 0;
+  // Posse vem em cada carro (`quantity`); `quantityOf` aplica os toques
+  // feitos nesta sessão.
+  const isInCollection = (car: CarListItem) => collection.quantityOf(car) > 0;
 
   // ----- Filtro sheet -----
   const [filterOpen, setFilterOpen] = useState(false);
@@ -310,7 +312,7 @@ export default function Busca() {
   const handleToggleCollection = useCallback(
     async (car: CarListItem) => {
       try {
-        await collection.toggle(car.id);
+        if (!(await collection.toggle(car.id, collection.quantityOf(car)))) return;
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
       } catch {
         show({ type: "danger", message: "Não foi possível atualizar sua coleção." });
@@ -492,6 +494,7 @@ export default function Busca() {
           data={items}
           numColumns={grid.columns}
           keyExtractor={(item) => item.id}
+          extraData={collection.version}
           contentContainerStyle={{ paddingBottom: bottomPadding }}
           onEndReached={handleEndReached}
           onEndReachedThreshold={0.6}
@@ -552,7 +555,7 @@ export default function Busca() {
                   <CarCard
                     car={exactToyMatch}
                     variant="row"
-                    inCollection={isInCollection(exactToyMatch.id)}
+                    inCollection={isInCollection(exactToyMatch)}
                     onPress={() => router.push(`/car/${exactToyMatch.id}`)}
                     onToggleCollection={() => handleToggleCollection(exactToyMatch)}
                   />
@@ -566,7 +569,7 @@ export default function Busca() {
                 car={item}
                 variant="grid"
                 width={grid.itemWidth}
-                inCollection={isInCollection(item.id)}
+                inCollection={isInCollection(item)}
                 onPress={() => router.push(`/car/${item.id}`)}
                 onToggleCollection={() => handleToggleCollection(item)}
               />

@@ -74,8 +74,9 @@ export default function CarDetalhe() {
   const [isReadMoreShown, setIsReadMoreShown] = useState(false);
 
   const collection = useCollectionStore();
-  // Lê a quantidade direto do store compartilhado (atualiza em tempo real).
-  const quantity = detail ? collection.items[detail.id] ?? 0 : 0;
+  // A posse vem no próprio carro (`quantity`); `quantityOf` aplica os
+  // toques desta sessão (atualiza na hora).
+  const quantity = detail ? collection.quantityOf(detail) : 0;
   const showSkeleton = useDelayedFlag(loadState === "loading", 150);
   const inCollection = quantity > 0;
 
@@ -133,11 +134,10 @@ export default function CarDetalhe() {
   const handleAdd = useCallback(async () => {
     if (!detail) return;
     // Para visitante, o store cuida de abrir o login via `onRequireSession`.
+    const wasIn = quantity > 0;
     try {
-      await collection.toggle(detail.id);
-      // Se o usuário não estava logado, o store não fez a operação —
-      // não disparamos Toast de sucesso nesse caso.
-      if (collection.items[detail.id] && collection.items[detail.id]! > 0) {
+      if (!(await collection.toggle(detail.id, quantity))) return;
+      if (!wasIn) {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
         show({
           type: "success",
@@ -148,30 +148,30 @@ export default function CarDetalhe() {
     } catch {
       show({ type: "danger", message: "Não foi possível atualizar sua coleção." });
     }
-  }, [detail, collection, show, router]);
+  }, [detail, quantity, collection, show, router]);
 
   const handleChangeQuantity = useCallback(
     async (next: number) => {
       if (!detail) return;
       try {
-        await collection.setQuantity(detail.id, next);
+        await collection.setQuantity(detail.id, quantity, next);
       } catch {
         show({ type: "danger", message: "Não foi possível atualizar sua coleção." });
       }
     },
-    [detail, collection, show]
+    [detail, quantity, collection, show]
   );
 
   const handleRemove = useCallback(async () => {
     if (!detail) return;
     try {
-      await collection.remove(detail.id);
+      await collection.remove(detail.id, quantity);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => undefined);
       show({ type: "info", message: "Removida da sua coleção." });
     } catch {
       show({ type: "danger", message: "Não foi possível atualizar sua coleção." });
     }
-  }, [detail, collection, show]);
+  }, [detail, quantity, collection, show]);
 
   // ----- Dados derivados -----
   const images = useMemo(() => {

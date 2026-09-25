@@ -1,7 +1,5 @@
-import { ExecutionMethod } from "react-native-appwrite";
 import {
   account,
-  functions,
   withServiceError,
   ServiceError,
   setOnUnauthorized,
@@ -9,6 +7,7 @@ import {
   type SessionEndReason,
   appwriteErrorInfo,
 } from "./_appwrite";
+import { api, clearJwt } from "./_http";
 import {
   getCurrentSession,
   setCurrentSession,
@@ -97,7 +96,9 @@ export async function signUp(input: {
   try {
     await authCall(() =>
       account.create({
-        userId: "user-" + cryptoId(),
+        // v2: o id da conta é um UUID, o mesmo `users.id` do Postgres.
+        // `ID.unique()` não serve (o backend recusa id que não é UUID).
+        userId: uuidV4(),
         email,
         password: input.password,
         name: input.name.trim(),
@@ -239,47 +240,40 @@ export type DeleteAccountError = "wrong_password" | "rate_limited" | "network" |
 export type DeleteAccountResult = { ok: true } | { ok: false; error: DeleteAccountError };
 
 /**
- * Exclui a conta (`07-perfil.md` §5.1) pela Function `account-delete`
- * (síncrona, POST `{ password }`; o usuário vem da sessão). O servidor
- * confere a senha e apaga, antes do 200, coleção, estatísticas, o
- * usuário no Auth e todas as sessões.
+ * Exclui a conta (`07-perfil.md` §5.1): `POST /v2/me/delete { password }`
+ * no backend, que confere a senha no Appwrite, apaga os dados no Postgres
+ * e depois o usuário no Appwrite (com as sessões).
  *
- * Status → erro: 401 wrong_password · 429 rate_limited · outros unknown.
- * Resposta perdida (falha de rede ao executar): consulta `account.get()`;
- * 401 = a conta já foi apagada → sucesso; se responder, a conta existe.
+ * Status → erro: 401 wrong_password · 429 rate_limited · outros unknown
+ * (409 = usuário com notícias publicadas).
+ * Resposta perdida (sem rede): consulta `account.get()`; 401 = a conta já
+ * foi apagada → sucesso; se responder, a conta existe.
  *
  * Não limpa o estado local: quem chama navega para o Login e depois
  * encerra a sessão local (nunca `deleteSession`, que daria 401).
  */
 export async function deleteAccount(password: string): Promise<DeleteAccountResult> {
-  let execution: { responseStatusCode: number; responseBody: string };
   try {
-    execution = await authCall(() =>
-      functions.createExecution({
-        functionId: "account-delete",
-        body: JSON.stringify({ password }),
-        async: false,
-        method: ExecutionMethod.POST,
-      })
-    );
+    await api<{ ok: true }>("/v2/me/delete", { method: "POST", body: { password }, on401: "return" });
+    clearJwt();
+    return { ok: true };
   } catch (err) {
-    if (isRateLimited(err)) return { ok: false, error: "rate_limited" };
+    const { status } = appwriteErrorInfo(err);
+    if (status === 401) return { ok: false, error: "wrong_password" };
+    if (status === 429) return { ok: false, error: "rate_limited" };
     if (!isNetwork(err)) return { ok: false, error: "unknown" };
     // Resposta perdida: a conta pode ter sido apagada mesmo assim.
     try {
       await authCall(() => account.get());
       return { ok: false, error: "network" };
     } catch (checkErr) {
-      return appwriteErrorInfo(checkErr).status === 401
-        ? { ok: true }
-        : { ok: false, error: "network" };
+      if (appwriteErrorInfo(checkErr).status === 401) {
+        clearJwt();
+        return { ok: true };
+      }
+      return { ok: false, error: "network" };
     }
   }
-  const status = execution.responseStatusCode;
-  if (status >= 200 && status < 300) return { ok: true };
-  if (status === 401) return { ok: false, error: "wrong_password" };
-  if (status === 429) return { ok: false, error: "rate_limited" };
-  return { ok: false, error: "unknown" };
 }
 
 /**
@@ -293,6 +287,7 @@ export async function signOut(): Promise<void> {
   } catch {
     // ignora — vamos limpar o espelho mesmo assim.
   }
+  clearJwt();
   setCurrentSession({ user: null });
   // Libera também o cache de reatividade: ao reentrar no app, o
   // `useCurrentUser` ainda lê o espelho até o `refresh` resolver.
@@ -345,18 +340,17 @@ export async function getSession(): Promise<Session> {
 import type { User } from "@/types";
 
 /**
- * ID curto (16 chars hex) para `userId` no cadastro. O Appwrite aceita
- * qualquer string com até 36 chars; usamos um sufixo randômico para
- * evitar colisões.
+ * UUID v4 para o `$id` da conta no cadastro (arquitetura v2: é o mesmo
+ * `users.id` do Postgres). O id não é segredo, então `Math.random`
+ * basta; evita um módulo nativo novo (`expo-crypto`) no build.
  */
-function cryptoId(): string {
-  // `Math.random` é suficiente para um id único no client (não é
-  // segredo). Em produção podemos trocar por `expo-crypto`.
-  return (
-    Math.random().toString(36).slice(2, 8) +
-    Math.random().toString(36).slice(2, 8) +
-    Math.random().toString(36).slice(2, 8)
-  );
+function uuidV4(): string {
+  const hex: string[] = [];
+  for (let i = 0; i < 16; i++) hex.push(Math.floor(Math.random() * 256).toString(16).padStart(2, "0"));
+  hex[6] = ((parseInt(hex[6], 16) & 0x0f) | 0x40).toString(16).padStart(2, "0");
+  hex[8] = ((parseInt(hex[8], 16) & 0x3f) | 0x80).toString(16).padStart(2, "0");
+  const h = hex.join("");
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
 }
 
 interface AppwriteUser {
@@ -419,6 +413,8 @@ async function authCall<T>(fn: () => Promise<T>): Promise<T> {
 
 /** Abre a sessão; `user_session_already_exists` conta como sucesso. */
 async function openSession(email: string, password: string): Promise<void> {
+  // Nova sessão: o JWT em cache (se houver) era de outra conta.
+  clearJwt();
   try {
     await authCall(() =>
       account.createEmailPasswordSession({
@@ -499,6 +495,7 @@ export { subscribeSession as subscribeAuth } from "./_session";
  */
 export function bindUnauthorizedHandler(handler: (reason: SessionEndReason) => void) {
   setOnUnauthorized((reason) => {
+    clearJwt();
     silentSignOut();
     handler(reason);
   });

@@ -26,7 +26,7 @@ type ListState = "loading" | "ok" | "error";
  * Uma única FlashList (SearchBar e contagem no header), A–Z, 30 por
  * página com rolagem infinita. Busca por título no servidor com
  * debounce de 300 ms. A posse ("Você tem X") vem junto de cada página
- * (`user_series_stats`, só para as séries da página).
+ * (`owned` de cada série, calculado no servidor).
  */
 export default function Series() {
   const router = useRouter();

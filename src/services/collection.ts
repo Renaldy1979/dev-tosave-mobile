@@ -1,147 +1,26 @@
-import {
-  tablesDb,
-  functions,
-  APPWRITE_DATABASE_ID,
-  APPWRITE_FUNCTION_COLLECTION,
-  previewUrl,
-  withServiceError,
-  isNotFound,
-  ServiceError,
-  Query,
-} from "./_appwrite";
-import type { Models } from "react-native-appwrite";
-import { ExecutionMethod } from "react-native-appwrite";
-import { getCurrentSession } from "./_session";
-import { getCurrentUser } from "./auth";
-import type {
-  CollectionItem,
-  CollectionItemWithCar,
-  CollectionSummary,
-} from "@/types";
+import { api } from "./_http";
+import { apiCarToListItem, type ApiCar } from "./catalog";
+import type { CollectionItem, CollectionItemWithCar, CollectionSummary } from "@/types";
 
 /**
- * Coleção do usuário — fase 2, Appwrite.
+ * Coleção do usuário — backend próprio, rotas `/v2/collection`.
  *
- * `userId` sai dos argumentos da coleção: o servidor usa o header
- * `x-appwrite-user-id` injetado pelo client nas chamadas autenticadas.
- *
- * Mutações (`add`/`set`/`remove`) vão pela Function `collection`
- * (§6 do backend) que é a única fonte da verdade — atualiza
- * `collection_items` + `user_stats` em transação atômica. O app segue
- * otimista (atualiza o store na hora e reconcilia com a resposta).
- *
- * Leituras paginadas usam `getCollectionPaged`. Resumo via
- * `user_stats` (404 → zeros).
+ * O usuário vem do JWT (nunca dos argumentos). A posse de cada carro vem
+ * no próprio item (`quantity`), em todas as listas: o app não guarda a
+ * coleção. As mutações são UPSERT/DELETE atômicos no Postgres e devolvem
+ * o item e o resumo.
  */
 
-const TABLE = {
-  collectionItems: "collection_items",
-  userStats: "user_stats",
-} as const;
+type ApiCollectionItem = CollectionItem & { car: ApiCar };
 
-
-/* ================================================================== */
-/*                          TIPOS DO APPWRITE                            */
-/* ================================================================== */
-
-interface CollectionItemRow extends Models.Row {
-  userId: string;
-  carId: string;
-  quantity: number;
-  carTitle: string;
-  carToy: string;
-  carCollector: string;
-  carYear: number;
-  carColor: string;
-  carScale: string;
-  carSeriePosition?: string;
-  carImageFileId?: string | null;
-  /** Atributos do carro, desnormalizados (ex.: T-Hunt). */
-  carAttributeIds?: string[];
-  brandId: string;
-  brandName: string;
-  serieId: string;
-  serieTitle: string;
-  searchText?: string;
-}
-
-interface UserStatsRow extends Models.Row {
-  totalItems: number;
-  totalModels: number;
-  duplicates: number;
-}
-
-/* ================================================================== */
-/*                            CONVERSORES                               */
-/* ================================================================== */
-
-function rowToCollectionItem(row: CollectionItemRow): CollectionItem {
-  return {
-    id: row.$id,
-    userId: row.userId,
-    carId: row.carId,
-    quantity: row.quantity,
-    createdAt: row.$createdAt ?? "",
-  };
-}
-
-function rowToCar(row: CollectionItemRow): {
-  id: string;
-  title: string;
-  description: string;
-  brandId: string;
-  brandName: string;
-  serieId: string;
-  serieTitle: string;
-  collector: string;
-  color: string;
-  toy: string;
-  year: number;
-  scale: string;
-  imagemFull: string | null;
-  imagemThumb: string | null;
-  seriePosition: string | null;
-  attributeIds: string[];
-} {
-  return {
-    id: row.carId,
-    title: row.carTitle,
-    description: "",
-    brandId: row.brandId,
-    brandName: row.brandName,
-    serieId: row.serieId,
-    serieTitle: row.serieTitle,
-    collector: row.carCollector,
-    color: row.carColor,
-    toy: row.carToy,
-    year: row.carYear,
-    scale: row.carScale,
-    imagemFull: row.carImageFileId
-      ? previewUrl(row.carImageFileId, 1080, 85)
-      : null,
-    imagemThumb: row.carImageFileId
-      ? previewUrl(row.carImageFileId, 400, 75)
-      : null,
-    seriePosition: row.carSeriePosition ?? null,
-    attributeIds: row.carAttributeIds ?? [],
-  };
-}
-
-function rowToItemWithCar(row: CollectionItemRow): CollectionItemWithCar {
-  return {
-    ...rowToCollectionItem(row),
-    car: rowToCar(row) as unknown as CollectionItemWithCar["car"],
-  };
-}
-
-/* ================================================================== */
-/*                            LISTAGEM                                   */
-/* ================================================================== */
+/** Ordenação da Coleção, aplicada no servidor. */
+export type CollectionSort = "recent" | "name" | "year" | "quantity";
 
 /** Critérios da tela Coleção. */
 export interface CollectionListFilters {
   q?: string;
   duplicatesOnly?: boolean;
+  sort?: CollectionSort;
 }
 
 /** Resposta paginada por cursor. */
@@ -153,240 +32,59 @@ export interface PaginatedCollection {
   nextCursor: string | null;
 }
 
-/** Lista a coleção paginada por cursor. `userId` sai dos args. */
+/** Coleção paginada por cursor, com busca, "Repetidos" e ordenação no servidor. */
 export async function getCollectionPaged(
   filters: CollectionListFilters & { cursor?: string; pageSize?: number } = {}
 ): Promise<PaginatedCollection> {
-  const pageSize = filters.pageSize ?? 20;
-  const isFirstPage = !filters.cursor;
-  const queries: string[] = [
-    Query.orderDesc("$createdAt"),
-    Query.limit(pageSize),
-  ];
-  if (filters.cursor) {
-    queries.push(Query.cursorAfter(filters.cursor));
-  }
-  if (filters.duplicatesOnly) {
-    queries.push(Query.greaterThan("quantity", 1));
-  }
-  if (filters.q && filters.q.trim().length > 0) {
-    // O servidor mantém `searchText` desnormalizado: título + toy +
-    // collector. O índice fulltext da coleção (`ft_search`) cobre.
-    queries.push(Query.search("searchText", filters.q.trim()));
-  }
-  const result = await withServiceError(() =>
-    tablesDb.listRows<CollectionItemRow>({
-      databaseId: APPWRITE_DATABASE_ID,
-      tableId: TABLE.collectionItems,
-      queries,
-    })
-  );
-  const rows = result.rows ?? [];
-  const items = rows.map(rowToItemWithCar);
-  const last = rows[rows.length - 1];
-  const nextCursor = rows.length === pageSize && last ? last.$id : null;
-  return {
-    items,
-    total: isFirstPage ? result.total ?? items.length : null,
-    nextCursor,
-  };
-}
-
-/** Mantida por compat — a Fase 2 prefere `getCollectionPaged`. */
-export async function getCollection(
-  filters: CollectionListFilters = {}
-): Promise<CollectionItemWithCar[]> {
-  const result = await getCollectionPaged({ ...filters, pageSize: 1000 });
-  return result.items;
-}
-
-/**
- * Resumo: `totalItems`, `totalModels`, `duplicates` (de `user_stats`).
- *
- * O `$id` da linha é o próprio `userId` do Auth (não `"current"`). 404
- * significa "usuário ainda não tem stats" (acontece na primeira mutação
- * da coleção, que cria a linha sob demanda) — devolve zeros em vez de
- * esconder a coleção. Qualquer outro erro sobe como `ServiceError` para
- * a UI mostrar `ErrorState` em vez de um empty state falso.
- */
-export async function getCollectionSummary(): Promise<CollectionSummary> {
-  // Sem usuário no espelho, consulta a sessão (que o preenche) em vez de
-  // devolver zeros em silêncio.
-  const userId = getCurrentSession().user?.id ?? (await getCurrentUser())?.id;
-  if (!userId) {
-    throw new ServiceError("unauthorized", "Sem sessão.");
-  }
-  try {
-    const row = await withServiceError(() =>
-      tablesDb.getRow<UserStatsRow>({
-        databaseId: APPWRITE_DATABASE_ID,
-        tableId: TABLE.userStats,
-        rowId: userId,
-      })
-    );
-    return {
-      totalItems: row.totalItems,
-      totalModels: row.totalModels,
-      duplicates: row.duplicates,
-    };
-  } catch (err) {
-    // Só o 404 de verdade (status 404 / `row_not_found`) vira zeros.
-    if (isNotFound(err)) return { totalItems: 0, totalModels: 0, duplicates: 0 };
-    throw err;
-  }
-}
-
-interface QuantityRow extends Models.Row {
-  carId: string;
-  quantity: number;
-}
-
-/** Quantidades de uma página (para os corações nas grids). */
-export async function getCollectionQuantities(
-  carIds: string[]
-): Promise<Record<string, number>> {
-  if (carIds.length === 0) return {};
-  const result = await withServiceError(() =>
-    tablesDb.listRows<QuantityRow>({
-      databaseId: APPWRITE_DATABASE_ID,
-      tableId: TABLE.collectionItems,
-      queries: [Query.equal("carId", carIds), Query.limit(carIds.length)],
-    })
-  );
-  const map: Record<string, number> = {};
-  for (const row of result.rows ?? []) {
-    map[row.carId] = row.quantity;
-  }
-  return map;
-}
-
-/**
- * Posse do usuário numa série: `carId → quantity` (`collection_items`
- * por `userId` + `serieId`, índice `idx_user_serie`; a maior série tem
- * 520 carros). Usada pela tela da série para não depender do store,
- * que carrega só a 1ª página da coleção.
- */
-export async function getSerieOwnership(serieId: string): Promise<Record<string, number>> {
-  const userId = getCurrentSession().user?.id ?? (await getCurrentUser())?.id;
-  if (!userId) throw new ServiceError("unauthorized", "Sem sessão.");
-  const result = await withServiceError(() =>
-    tablesDb.listRows<QuantityRow>({
-      databaseId: APPWRITE_DATABASE_ID,
-      tableId: TABLE.collectionItems,
-      queries: [
-        Query.equal("userId", userId),
-        Query.equal("serieId", serieId),
-        Query.select(["carId", "quantity"]),
-        Query.limit(600),
-      ],
-      total: false,
-    })
-  );
-  const map: Record<string, number> = {};
-  for (const row of result.rows ?? []) map[row.carId] = row.quantity;
-  return map;
-}
-
-/**
- * Quantidade de um carro na coleção. O `$id` da linha em
- * `collection_items` é determinístico (`ci_<hash(userId:carId)>`), mas
- * aqui preferimos consultar por `carId` (a row security já restringe
- * ao usuário logado). 404 → 0 (sem entrada). Outros erros sobem.
- */
-export async function getCollectionQuantity(
-  carId: string
-): Promise<number> {
-  try {
-    const result = await withServiceError(() =>
-      tablesDb.listRows<QuantityRow>({
-        databaseId: APPWRITE_DATABASE_ID,
-        tableId: TABLE.collectionItems,
-        queries: [Query.equal("carId", carId), Query.limit(1)],
-      })
-    );
-    return result.rows?.[0]?.quantity ?? 0;
-  } catch (err) {
-    if (isNotFound(err)) return 0;
-    throw err;
-  }
-}
-
-/* ================================================================== */
-/*                          MUTAÇÕES                                     */
-/* ================================================================== */
-
-type CollectionActionResult = {
-  item: CollectionItem | null;
-  summary: CollectionSummary;
-};
-
-/**
- * Chama a Function `collection` síncrona. Body: `{ action, carId,
- * quantity? }`. A resposta vem em `responseBody` como JSON
- * `{ item, summary }`.
- */
-async function callCollectionFunction(
-  action: "add" | "set" | "remove",
-  carId: string,
-  quantity?: number
-): Promise<CollectionActionResult> {
-  const body = JSON.stringify({ action, carId, quantity });
-  const execution = await withServiceError(() =>
-    functions.createExecution({
-      functionId: APPWRITE_FUNCTION_COLLECTION,
-      body,
-      async: false,
-      method: ExecutionMethod.POST,
-    })
-  );
-  // 4xx/5xx da Function → AppwriteException.
-  if (execution.responseStatusCode >= 400) {
-    let payload: { error?: string } = {};
-    try {
-      payload = JSON.parse(execution.responseBody || "{}");
-    } catch {
-      // ignora — payload fica vazio.
+  const page = await api<{ items: ApiCollectionItem[]; total: number | null; nextCursor: string | null }>(
+    "/v2/collection",
+    {
+      query: {
+        q: filters.q?.trim() || undefined,
+        duplicatesOnly: filters.duplicatesOnly ? true : undefined,
+        // O cursor só vale para a ordenação em que foi gerado.
+        sort: filters.sort ?? "recent",
+        cursor: filters.cursor,
+        limit: filters.pageSize ?? 20,
+      },
     }
-    const message = payload.error || `Erro ${execution.responseStatusCode}`;
-    throw new Error(message);
-  }
-  let parsed: CollectionActionResult = { item: null, summary: emptySummary() };
-  try {
-    parsed = JSON.parse(execution.responseBody || "{}");
-  } catch {
-    // sem body — fica com o summary vazio.
-  }
+  );
   return {
-    item: parsed.item ?? null,
-    summary: parsed.summary ?? emptySummary(),
+    items: page.items.map((it) => ({
+      id: it.id,
+      userId: it.userId,
+      carId: it.carId,
+      quantity: it.quantity,
+      createdAt: it.createdAt,
+      car: { ...apiCarToListItem(it.car), quantity: it.quantity },
+    })),
+    total: page.total,
+    nextCursor: page.nextCursor,
   };
 }
 
-function emptySummary(): CollectionSummary {
-  return { totalItems: 0, totalModels: 0, duplicates: 0 };
+/** Resumo: `totalItems`, `totalModels`, `duplicates`. */
+export async function getCollectionSummary(): Promise<CollectionSummary> {
+  return api<CollectionSummary>("/v2/collection/summary");
 }
 
-/** Adiciona uma unidade. */
-export async function addToCollection(
-  carId: string
-): Promise<CollectionItem | null> {
-  const result = await callCollectionFunction("add", carId);
-  return result.item;
+/** Resposta das mutações: o item (null se saiu) e o resumo atualizado. */
+export type CollectionMutationResult = { item: CollectionItem | null; summary: CollectionSummary };
+
+/** +1 unidade (teto de 99). */
+export async function addToCollection(carId: string): Promise<CollectionMutationResult> {
+  return api<CollectionMutationResult>(`/v2/collection/${encodeURIComponent(carId)}/add`, { method: "POST" });
 }
 
-/** Define a quantidade (0 remove). */
-export async function setCollectionQuantity(
-  carId: string,
-  quantity: number
-): Promise<CollectionItem | null> {
-  const result = await callCollectionFunction("set", carId, quantity);
-  return result.item;
+/** Define a quantidade (0 a 99; 0 remove). */
+export async function setCollectionQuantity(carId: string, quantity: number): Promise<CollectionMutationResult> {
+  return api<CollectionMutationResult>(`/v2/collection/${encodeURIComponent(carId)}`, {
+    method: "PUT",
+    body: { quantity: Math.max(0, Math.min(99, Math.floor(quantity))) },
+  });
 }
 
-/** Remove o item inteiro. */
-export async function removeFromCollection(
-  carId: string
-): Promise<boolean> {
-  await callCollectionFunction("remove", carId);
-  return true;
+/** Remove o carro da coleção. */
+export async function removeFromCollection(carId: string): Promise<CollectionMutationResult> {
+  return api<CollectionMutationResult>(`/v2/collection/${encodeURIComponent(carId)}`, { method: "DELETE" });
 }

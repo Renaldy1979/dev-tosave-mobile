@@ -6,7 +6,6 @@ import { cn } from "@/utils/cn";
 import { Text } from "../ui/Text";
 import { Badge } from "../ui/Badge";
 import { FavoriteButton } from "./FavoriteButton";
-import { QuantityStepper } from "../ui/QuantityStepper";
 import { CarImage } from "./CarImage";
 import type { CarListItem } from "@/types";
 
@@ -19,10 +18,9 @@ import type { CarListItem } from "@/types";
  *                  coração no canto superior direito.
  * - `row`        → linha horizontal com thumb à esquerda + texto +
  *                  coração.
- * - `collection` → mesmo grid, mas com `QuantityStepper glass` no
- *                  canto e badge "Repetido ×N" quando `quantity > 1`.
- *                  A subtração da última unidade abre
- *                  `onRemoveRequest`.
+ * - `collection` → mesmo grid, sem coração nem stepper, com badge
+ *                  "Repetido ×N" quando `quantity > 1`. A quantidade
+ *                  muda só no Detalhe do carro.
  *
  * Dados vêm por prop (`car: CarListItem`) — o componente não conhece
  * os services.
@@ -39,8 +37,6 @@ type Props = {
   onPress: () => void;
   onLongPress?: () => void;
   onToggleCollection?: () => void;
-  onChangeQuantity?: (next: number) => void;
-  onRemoveRequest?: () => void;
   accessibilityHint?: string;
   width?: number;
 };
@@ -53,8 +49,6 @@ export function CarCard({
   onPress,
   onLongPress,
   onToggleCollection,
-  onChangeQuantity,
-  onRemoveRequest,
   accessibilityHint = "Abre os detalhes",
   width,
 }: Props) {
@@ -105,10 +99,11 @@ export function CarCard({
 
   // ----- grid + collection variants -----
   const isCollection = variant === "collection";
+  const owned = inCollection || isCollection;
   const collectionSuffix =
-    inCollection && quantity > 0
+    owned && quantity > 0
       ? `, ${quantity} ${quantity === 1 ? "unidade" : "unidades"} na sua coleção`
-      : inCollection
+      : owned
         ? ", na sua coleção"
         : "";
   const huntSuffix = hunt ? `, ${hunt.spokenName}` : "";
@@ -135,24 +130,17 @@ export function CarCard({
             #{car.collector}
           </Badge>
         </View>
-        {/* favorite / stepper — canto superior direito */}
-        <View className="absolute top-2 right-2">
-          {isCollection && onChangeQuantity ? (
-            <QuantityStepper
-              value={quantity}
-              variant="glass"
-              onChange={onChangeQuantity}
-              onRemoveRequest={onRemoveRequest}
-            />
-          ) : onToggleCollection ? (
+        {/* favorite — canto superior direito */}
+        {!isCollection && onToggleCollection ? (
+          <View className="absolute top-2 right-2">
             <FavoriteButton
               active={inCollection}
               onToggle={onToggleCollection}
               variant="glass"
               size="sm"
             />
-          ) : null}
-        </View>
+          </View>
+        ) : null}
         {/* T-Hunt / STH — canto inferior esquerdo, sobre círculo escuro */}
         {hunt ? (
           <View

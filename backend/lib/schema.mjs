@@ -239,6 +239,16 @@ export const TABLES = [
     indexes: [],
   },
   {
+    // Trava por usuário da Function collection: serializa mutações simultâneas.
+    // $id = "lk_" + sha256(userId)[0:32]; expira sozinha (expiresAt). Só o servidor.
+    id: "locks",
+    name: "Locks",
+    permissions: [],
+    rowSecurity: true,
+    columns: [dt("expiresAt", { required: true })],
+    indexes: [],
+  },
+  {
     // Tentativas por usuário para ações sensíveis (ex.: excluir conta).
     // $id = "<ação>_" + sha256(userId)[0:32]. Só o servidor lê e escreve.
     id: "rate_limits",

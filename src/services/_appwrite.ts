@@ -1,72 +1,61 @@
-import { Client, Account, TablesDB, Storage, Functions, AppwriteException, Query } from "react-native-appwrite";
+import { Client, Account, AppwriteException } from "react-native-appwrite";
 import Constants from "expo-constants";
 
 /**
- * Cliente do Appwrite (fase 2 — backend `tosave` no Appwrite 1.8.1).
+ * Cliente do Appwrite — arquitetura v2 (`docs/ARQUITETURA-V2.md`).
  *
- * Endpoint e Project ID são públicos (não são segredos) e por isso
- * ficam em `app.json → expo.extra`. O Expo **só injeta `process.env`
- * com acesso literal** (Expo não consegue ler `process.env[NOME_VARIAVEL]`
- * dinâmico); por isso aqui a leitura é literal.
+ * O Appwrite fica só com o login (Auth: cadastro, sessão, JWT,
+ * recuperação de senha, bloqueio) e as imagens (Storage, lido direto
+ * pela URL de preview). Os dados vêm do backend próprio por REST
+ * (`_http.ts`, rotas `/v2`).
  *
- * Prioridade:
- * 1. `process.env.EXPO_PUBLIC_APPWRITE_ENDPOINT` (literal) —
- *    override de build/dev via `.env`.
- * 2. `Constants.expoConfig.extra.appwriteEndpoint` (de `app.json`).
- *
- * Mesmo padrão para o Project ID. ID do banco e bucket ficam também
- * em `app.json → expo.extra` por consistência (não são segredos).
+ * Endpoint e Project ID são públicos: `app.json → expo.extra`, com
+ * override por `.env` (o Expo só injeta `process.env` com acesso
+ * literal).
  */
 type ExpoExtra = {
   appwriteEndpoint?: string;
   appwriteProjectId?: string;
-  appwriteDatabaseId?: string;
   appwriteBucketImages?: string;
+  appwriteBucketSeriesLogos?: string;
 };
 
-function readExtra(): ExpoExtra {
-  // `Constants.expoConfig` é `null` em alguns testes SSR; o optional
-  // chaining evita o erro.
-  const extra = (Constants.expoConfig?.extra ?? {}) as ExpoExtra;
-  return extra;
-}
+const extra = (Constants.expoConfig?.extra ?? {}) as ExpoExtra;
 
 // Acesso literal ao `process.env` (o Expo só injeta literais).
 const ENV_ENDPOINT = process.env.EXPO_PUBLIC_APPWRITE_ENDPOINT;
 const ENV_PROJECT_ID = process.env.EXPO_PUBLIC_APPWRITE_PROJECT_ID;
 
-const extra = readExtra();
-
 export const APPWRITE_ENDPOINT: string = ENV_ENDPOINT || extra.appwriteEndpoint || "";
-export const APPWRITE_PROJECT_ID: string =
-  ENV_PROJECT_ID || extra.appwriteProjectId || "";
+export const APPWRITE_PROJECT_ID: string = ENV_PROJECT_ID || extra.appwriteProjectId || "";
 
-export const APPWRITE_DATABASE_ID: string = extra.appwriteDatabaseId ?? "tosave";
-export const APPWRITE_BUCKET_IMAGES: string =
-  extra.appwriteBucketImages ?? "car-images";
-export const APPWRITE_FUNCTION_COLLECTION = "collection";
+const BUCKET_CAR_IMAGES = extra.appwriteBucketImages ?? "car-images";
+const BUCKET_SERIES_LOGOS = extra.appwriteBucketSeriesLogos ?? "series-logos";
 
 /**
- * Categoria `ImageFormat` (vinda do `react-native-appwrite`) só exporta
- * o tipo `ImageFormat`. O valor runtime é a string `"webp"`. Mantemos
- * a constante aqui para o `storage.getFilePreviewURL` aceitar o tipo.
+ * URL de preview (WebP redimensionado) de um arquivo público do Storage,
+ * montada à mão com `encodeURIComponent` (não depende de `URL` do
+ * runtime). O backend não fica no caminho da imagem.
  */
-export const ImageFormatWebp = "webp" as const;
-
-/**
- * URL de preview (WebP redimensionado) de um arquivo do bucket de
- * imagens, montada à mão com `encodeURIComponent`: não depende do
- * `URL`/`searchParams` do runtime (o `getFilePreviewURL` do SDK usa os
- * dois). O bucket tem leitura pública; `project` basta para o Appwrite.
- */
-export function previewUrl(fileId: string, width: number, quality: number): string {
+function previewUrl(bucket: string, fileId: string, width: number, quality: number): string {
   return (
     `${APPWRITE_ENDPOINT.replace(/\/+$/, "")}` +
-    `/storage/buckets/${encodeURIComponent(APPWRITE_BUCKET_IMAGES)}` +
+    `/storage/buckets/${encodeURIComponent(bucket)}` +
     `/files/${encodeURIComponent(fileId)}/preview` +
     `?width=${width}&height=0&quality=${quality}&output=webp` +
     `&project=${encodeURIComponent(APPWRITE_PROJECT_ID)}`
   );
+}
+
+/** Foto de carro (`car-images`): grid 400/75, detalhe 1080/85. */
+export function carImageUrl(fileId: string | null | undefined, size: "grid" | "full"): string | null {
+  if (!fileId) return null;
+  return size === "full" ? previewUrl(BUCKET_CAR_IMAGES, fileId, 1080, 85) : previewUrl(BUCKET_CAR_IMAGES, fileId, 400, 75);
+}
+
+/** Logo de série (`series-logos`, 150×150 com transparência): 300/90. */
+export function serieLogoUrl(fileId: string | null | undefined): string {
+  return fileId ? previewUrl(BUCKET_SERIES_LOGOS, fileId, 300, 90) : "";
 }
 
 export const client = new Client();
@@ -75,11 +64,8 @@ if (APPWRITE_ENDPOINT) client.setEndpoint(APPWRITE_ENDPOINT);
 if (APPWRITE_PROJECT_ID) client.setProject(APPWRITE_PROJECT_ID);
 
 export const account = new Account(client);
-export const tablesDb = new TablesDB(client);
-export const storage = new Storage(client);
-export const functions = new Functions(client);
 
-export { AppwriteException, Query };
+export { AppwriteException };
 
 /**
  * Em desenvolvimento, avisa se o endpoint ficou vazio (sem .env nem
@@ -113,17 +99,23 @@ export type ServiceErrorCode = "unauthorized" | "network" | "unknown";
 export class ServiceError extends Error {
   code: ServiceErrorCode;
   cause?: unknown;
-  /** HTTP status do Appwrite (0 quando não houve resposta). */
+  /** HTTP status (Appwrite ou backend; 0 quando não houve resposta). */
   status: number;
   /** `type` do erro do Appwrite (ex.: `row_not_found`), ou `""`. */
   type: string;
-  constructor(code: ServiceErrorCode, message: string, cause?: unknown) {
+  constructor(
+    code: ServiceErrorCode,
+    message: string,
+    cause?: unknown,
+    /** Status/type explícitos (erros HTTP do backend). */
+    info?: { status: number; type?: string }
+  ) {
     super(message);
     this.code = code;
     this.cause = cause;
-    const info = appwriteErrorInfo(cause);
-    this.status = info.status;
-    this.type = info.type;
+    const fromCause = appwriteErrorInfo(cause);
+    this.status = info?.status ?? fromCause.status;
+    this.type = info?.type ?? fromCause.type;
   }
 }
 
@@ -148,10 +140,9 @@ export function appwriteErrorInfo(err: unknown): { status: number; type: string 
   return { status: err.code ?? 0, type };
 }
 
-/** `true` quando o Appwrite respondeu 404 (linha/arquivo inexistente). */
+/** `true` quando a resposta foi 404 (carro, série ou linha inexistente). */
 export function isNotFound(err: unknown): boolean {
-  const { status, type } = appwriteErrorInfo(err);
-  return status === 404 || type === "row_not_found" || type === "document_not_found";
+  return appwriteErrorInfo(err).status === 404;
 }
 
 /** Por que a sessão caiu: expirou/revogada, ou a conta foi bloqueada. */
@@ -169,7 +160,7 @@ export function setOnUnauthorized(handler: UnauthorizedHandler | null) {
   onUnauthorized = handler;
 }
 
-function notifyUnauthorized(reason: SessionEndReason) {
+export function notifyUnauthorized(reason: SessionEndReason) {
   onUnauthorized?.(reason);
 }
 

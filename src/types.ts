@@ -89,6 +89,11 @@ export interface Car {
   scale: string;
   /** Ids dos atributos (ex.: T-Hunt). Opcional: nem toda leitura traz. */
   attributeIds?: string[];
+  /**
+   * Unidades que o usuário logado tem deste carro (0 = não tem). Vem em
+   * todo carro da API v2, calculado no servidor na mesma consulta.
+   */
+  quantity?: number;
   createdAt: string;
   updatedAt: string;
 }

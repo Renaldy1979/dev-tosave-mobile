@@ -73,6 +73,7 @@ export function CarImage({
     <Image
       source={{ uri }}
       recyclingKey={uri}
+      cachePolicy="memory-disk"
       contentFit={contentFit}
       transition={transition}
       onError={(event) => {

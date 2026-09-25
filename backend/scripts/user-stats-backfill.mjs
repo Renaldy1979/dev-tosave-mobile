@@ -10,6 +10,8 @@
  *
  *   npm run user-stats-backfill -- --user=<userId> [--dry-run]
  *   npm run user-stats-backfill -- --all [--dry-run]
+ *   --repair-user-stats: recalcula TAMBÉM user_stats (totalItems/totalModels/
+ *     duplicates) a partir de collection_items. Uso pontual (ex.: usuário de teste).
  */
 import { Permission, Role, Query } from "node-appwrite";
 import { tablesDB, users, DATABASE_ID } from "../lib/appwrite.mjs";
@@ -20,6 +22,7 @@ const args = Object.fromEntries(process.argv.slice(2).map((a) => {
   return [k, v ?? true];
 }));
 const dryRun = Boolean(args["dry-run"]);
+const repairUserStats = Boolean(args["repair-user-stats"]);
 
 async function listAll(tableId, queries) {
   const rows = [];
@@ -37,6 +40,14 @@ async function listAll(tableId, queries) {
 
 async function backfill(userId) {
   const items = await listAll("collection_items", [Query.equal("userId", userId), Query.select(["$id", "serieId", "carYear", "quantity"])]);
+  if (repairUserStats && !dryRun) {
+    const live = items.filter((it) => it.quantity >= 1);
+    await tablesDB.upsertRow({
+      databaseId: DATABASE_ID, tableId: "user_stats", rowId: userId,
+      data: { totalItems: live.reduce((s, it) => s + it.quantity, 0), totalModels: live.length, duplicates: live.filter((it) => it.quantity > 1).length },
+      permissions: [Permission.read(Role.user(userId))],
+    });
+  }
   const bySerie = new Map();
   const byYear = new Map();
   for (const it of items) {

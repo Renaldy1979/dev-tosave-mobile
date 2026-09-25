@@ -67,6 +67,8 @@ A fase 1 está entregue (tag `v0.1.0-fase1`). A fase 2 vem **antes** do portal w
   - Se o usuário for bloqueado com o app aberto, a próxima chamada falha com 401, e o app deve ir ao Login com a mensagem de conta desativada.
   - **Monetização (futuro):** prever no modelo de usuário um campo de plano/assinatura (ex.: free/premium) e limites por plano, sem implementar agora.
 
+- **Versão web do app no domínio `tosave.cloud`** (decisão do usuário, 25/09/2026). Tudo o que existe no app também existe na web, junto com o painel admin, no mesmo portal. O backend é o mesmo da v2 (`/v2`), com login pelo Appwrite (ver `ARQUITETURA-V2.md`). A forma (Expo Web a partir deste código ou um front separado) ainda será decidida.
+
 ### Obrigatório antes de publicar nas lojas (fora do escopo da fase 2, não pode ser esquecido)
 
 - **Excluir conta pelo app**, no Perfil. A App Store exige isso de apps que permitem criar conta. No Appwrite, a exclusão precisa de uma Function no servidor, porque o SDK client não apaga o próprio usuário.

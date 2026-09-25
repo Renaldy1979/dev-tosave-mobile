@@ -3,18 +3,16 @@
  *
  *   import { listCarsPaged, signIn } from "@/services";
  *
- * Os services da fase 2 falam com o Appwrite (fase 2 do projeto). A
- * pasta `src/mocks/` existe só para desenvolvimento e **nenhuma tela
- * nem service importa de lá** — qualquer leitura de mock é bug.
+ * Arquitetura v2: os dados vêm do backend próprio por REST (`_http.ts`,
+ * rotas `/v2`); o Appwrite fica só com o login e as imagens. A pasta
+ * `src/mocks/` existe só para desenvolvimento e **nenhuma tela nem
+ * service importa de lá** — qualquer leitura de mock é bug.
  */
 export {
   countCars,
   getCarById,
-  getCatalogTotalCars,
-  getOwnedBySerie,
   getSerie,
-  getSeriesByIds,
-  listAllCarsBySerie,
+  listSerieCars,
   listSeriesPaged,
   getSeriesCarCount,
   listAttributes,
@@ -30,7 +28,9 @@ export {
 export type {
   ListCarsPagedOptions,
   PaginatedCars,
+  PaginatedSerieCars,
   PaginatedSeries,
+  SerieCarsFilter,
   SerieListItem,
   SerieWithCount,
 } from "./catalog";
@@ -44,14 +44,16 @@ export type { SerieProgress, StatsSummary, YearProgress } from "./stats";
 
 export {
   addToCollection,
-  getCollection,
-  getCollectionQuantity,
+  getCollectionPaged,
   getCollectionSummary,
-  getSerieOwnership,
   removeFromCollection,
   setCollectionQuantity,
 } from "./collection";
-export type { CollectionListFilters } from "./collection";
+export type {
+  CollectionListFilters,
+  CollectionMutationResult,
+  CollectionSort,
+} from "./collection";
 
 export {
   changePassword,

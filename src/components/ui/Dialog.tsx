@@ -95,7 +95,9 @@ export function Dialog({
       navigationBarTranslucent
       onRequestClose={requestClose}
     >
-      <ThemeScope scheme={scheme}>
+      {/* `flex-1`: sem ele o ThemeScope encolhe ao conteúdo e o fundo
+          escuro e o painel ficavam presos no topo da tela. */}
+      <ThemeScope scheme={scheme} className="flex-1">
         <View
           style={{
             flex: 1,

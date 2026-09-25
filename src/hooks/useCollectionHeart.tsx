@@ -21,18 +21,18 @@ export function useCollectionHeart(): {
   const router = useRouter();
   const collection = useCollectionStore();
   const { show } = useToast();
-  const [confirmRemove, setConfirmRemove] = useState<CarListItem | null>(null);
+  const [confirmRemove, setConfirmRemove] = useState<{ car: CarListItem; quantity: number } | null>(null);
 
   const onToggle = useCallback(
     async (car: CarListItem) => {
-      const currentQty = collection.items[car.id] ?? 0;
+      const currentQty = collection.quantityOf(car);
       const wasIn = currentQty > 0;
       if (wasIn && currentQty > 1) {
-        setConfirmRemove(car);
+        setConfirmRemove({ car, quantity: currentQty });
         return;
       }
       try {
-        await collection.toggle(car.id);
+        if (!(await collection.toggle(car.id, currentQty))) return;
         if (!wasIn) {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
           show({
@@ -53,18 +53,17 @@ export function useCollectionHeart(): {
 
   const handleConfirmRemoveAll = useCallback(async () => {
     if (!confirmRemove) return;
-    const car = confirmRemove;
-    const previousQty = collection.items[car.id] ?? 0;
+    const { car, quantity: previousQty } = confirmRemove;
     setConfirmRemove(null);
     try {
-      await collection.remove(car.id);
+      await collection.remove(car.id, previousQty);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => undefined);
       show({
         type: "info",
         message: `Removidas ${previousQty} unidades da sua coleção.`,
         action: {
           label: "Desfazer",
-          onPress: () => collection.setQuantity(car.id, previousQty).catch(() => undefined),
+          onPress: () => collection.setQuantity(car.id, 0, previousQty).catch(() => undefined),
         },
       });
     } catch {
@@ -76,9 +75,9 @@ export function useCollectionHeart(): {
     <ConfirmDialog
       open={confirmRemove !== null}
       onClose={() => setConfirmRemove(null)}
-      title={`Remover todas as ${collection.items[confirmRemove?.id ?? ""] ?? 0} unidades?`}
+      title={`Remover todas as ${confirmRemove?.quantity ?? 0} unidades?`}
       description={
-        confirmRemove ? `${confirmRemove.title} sai completamente da sua coleção.` : undefined
+        confirmRemove ? `${confirmRemove.car.title} sai completamente da sua coleção.` : undefined
       }
       onConfirm={handleConfirmRemoveAll}
     />

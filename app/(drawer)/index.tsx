@@ -5,7 +5,7 @@ import { useRouter } from "expo-router";
 import { ChevronRight, Search } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/theme/ThemeProvider";
-import { getSeriesCarCount, listCarsPaged, listSeries } from "@/services";
+import { listCarsPaged, listSeries } from "@/services";
 import type { CarListItem, Serie } from "@/types";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useDelayedFlag } from "@/hooks/useDelayedFlag";
@@ -53,6 +53,11 @@ export default function Home() {
   const [seriesState, setSeriesState] = useState<SeriesState>("loading");
 
   const [cars, setCars] = useState<CarListItem[]>([]);
+  // Resumo buscado ao abrir a Home (a contagem "N na sua coleção").
+  const { refreshSummary } = collection;
+  useEffect(() => {
+    refreshSummary().catch(() => undefined);
+  }, [refreshSummary]);
   const [carsTotal, setCarsTotal] = useState(0);
   const [carsCursor, setCarsCursor] = useState<string | null>(null);
   const [gridState, setGridState] = useState<GridState>("loading");
@@ -66,12 +71,10 @@ export default function Home() {
   const loadSeries = useCallback(async () => {
     setSeriesState("loading");
     try {
-      const [list, counts] = await Promise.all([
-        listSeries({ featured: true }),
-        getSeriesCarCount(),
-      ]);
+      // Cada série em destaque já traz o `carCount` (uma chamada só).
+      const list = await listSeries({ featured: true });
       setSeries(list);
-      setSeriesCount(counts);
+      setSeriesCount(Object.fromEntries(list.map((s) => [s.id, s.carCount])));
       setSeriesState(list.length === 0 ? "empty" : "ok");
     } catch {
       setSeriesState("error");
@@ -111,7 +114,7 @@ export default function Home() {
       await Promise.all([
         loadSeries(),
         loadCarsPage(null, true),
-        collection.refresh(),
+        collection.refreshSummary(),
         refreshUser(),
       ]);
     } catch {
@@ -154,6 +157,7 @@ export default function Home() {
         data={data}
         numColumns={grid.columns}
         keyExtractor={(item) => item.id}
+        extraData={collection.version}
         contentContainerStyle={{ paddingBottom: bottomPadding }}
         refreshControl={
           <RefreshControl
@@ -170,7 +174,7 @@ export default function Home() {
               car={item}
               variant="grid"
               width={grid.itemWidth}
-              inCollection={(collection.items[item.id] ?? 0) > 0}
+              inCollection={collection.quantityOf(item) > 0}
               onPress={() => router.push(`/car/${item.id}`)}
               onToggleCollection={() => heart.onToggle(item)}
             />

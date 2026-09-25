@@ -1,10 +1,9 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import type { Models } from "react-native-appwrite";
-import { tablesDb, APPWRITE_DATABASE_ID, withServiceError } from "./_appwrite";
+import { api } from "./_http";
 
 /**
- * Configuração remota do app (`app_config`, linha única `$id = "public"`,
- * leitura pública: vale antes do login). Nenhum link fica fixo no
+ * Configuração remota do app: `GET /v2/config` (rota pública do backend,
+ * vale antes do login). Nenhum link fica fixo no
  * código: Termos, Privacidade, e-mail de suporte e a URL de retorno da
  * recuperação de senha vêm daqui. Valor vazio = o item não aparece.
  */
@@ -24,13 +23,6 @@ export const EMPTY_APP_CONFIG: AppConfig = {
 
 const CACHE_KEY = "tosave.appConfig.v1";
 
-interface AppConfigRow extends Models.Row {
-  termsUrl?: string | null;
-  privacyUrl?: string | null;
-  supportEmail?: string | null;
-  passwordRecoveryUrl?: string | null;
-}
-
 function normalize(raw: Partial<Record<keyof AppConfig, unknown>>): AppConfig {
   const text = (v: unknown) => (typeof v === "string" ? v.trim() : "");
   return {
@@ -43,14 +35,8 @@ function normalize(raw: Partial<Record<keyof AppConfig, unknown>>): AppConfig {
 
 /** Lê a config no servidor e atualiza o cache local. */
 export async function getAppConfig(): Promise<AppConfig> {
-  const row = await withServiceError(() =>
-    tablesDb.getRow<AppConfigRow>({
-      databaseId: APPWRITE_DATABASE_ID,
-      tableId: "app_config",
-      rowId: "public",
-    })
-  );
-  const config = normalize(row);
+  const raw = await api<Partial<Record<keyof AppConfig, unknown>>>("/v2/config", { auth: false });
+  const config = normalize(raw ?? {});
   try {
     await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(config));
   } catch {

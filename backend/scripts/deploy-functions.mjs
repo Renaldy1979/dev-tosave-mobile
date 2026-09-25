@@ -28,7 +28,7 @@ const FUNCTIONS = [
     execute: ["users"],
     events: [],
     schedule: "",
-    timeout: 15,
+    timeout: 30,
     logging: false,
     scopes: ["rows.read", "rows.write"],
   },

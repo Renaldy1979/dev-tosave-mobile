@@ -20,8 +20,8 @@ type Props = {
   confirmLabel?: string;
   /** Rótulo do botão de cancelar (padrão "Cancelar"). */
   cancelLabel?: string;
-  /** Ícone do círculo (padrão `Trash2`; o Sair usa `LogOut`). */
-  icon?: LucideIcon;
+  /** Ícone do círculo (padrão `Trash2`); `null` = sem ícone. */
+  icon?: LucideIcon | null;
   onConfirm: () => Promise<void> | void;
 };
 
@@ -53,7 +53,7 @@ export function ConfirmDialog({
       onClose={onClose}
       title={title}
       description={description}
-      icon={icon}
+      icon={icon ?? undefined}
       iconTone="flame"
       actions={[
         { label: confirmLabel, onPress: handleConfirm, variant: "danger", loading },

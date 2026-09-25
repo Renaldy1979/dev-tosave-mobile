@@ -4,7 +4,7 @@ import { FlashList } from "@shopify/flash-list";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/theme/ThemeProvider";
-import { getSerie, getSerieOwnership, listAllCarsBySerie, type SerieWithCount } from "@/services";
+import { getSerie, listSerieCars, type SerieCarsFilter, type SerieWithCount } from "@/services";
 import { useCollectionStore } from "@/hooks/useCollectionStore";
 import { useCollectionHeart } from "@/hooks/useCollectionHeart";
 import { useDelayedFlag } from "@/hooks/useDelayedFlag";
@@ -31,16 +31,19 @@ function parseFiltro(value: string | undefined): Filtro {
   return value === "colecao" || value === "faltam" ? value : "todos";
 }
 
+const FILTER_API: Record<Filtro, SerieCarsFilter> = { todos: "all", colecao: "owned", faltam: "missing" };
+const PAGE = 20;
+
 /**
  * Tela da série (`docs/design/telas/10-series.md` §B): stack com
  * voltar, fora do drawer. Cabeçalho com logo, título, "Você tem X de
  * N" e barra; segmento Todos / Na coleção / Faltam (param `filtro`) e o
  * grid do CarCard igual ao da Home, pela posição na série.
  *
- * A posse da série é lida no servidor (`getSerieOwnership`) e mesclada
- * no store da coleção — o mesmo do coração —, então contagem, barra e
- * corações andam juntos e ficam certos para coleção de qualquer tamanho. Em "Faltam", um carro adicionado fica
- * visível até trocar de segmento ou atualizar.
+ * Cada segmento é uma consulta paginada no servidor (20 por página, mais
+ * ao rolar), e cada carro traz a posse. Um toque no coração atualiza só
+ * aquele card e as contagens (sem recarregar): em "Faltam", o carro
+ * adicionado continua visível até trocar de segmento ou atualizar.
  */
 export default function SerieScreen() {
   const router = useRouter();
@@ -49,54 +52,94 @@ export default function SerieScreen() {
   const { c } = useTheme();
   const { show } = useToast();
   const collection = useCollectionStore();
-  const { mergeOwnership } = collection;
   const heart = useCollectionHeart();
   const grid = useGridLayout();
 
   const [serie, setSerie] = useState<SerieWithCount | null>(null);
   const [cars, setCars] = useState<CarListItem[]>([]);
+  const [counts, setCounts] = useState({ total: 0, owned: 0, missing: 0 });
+  const [cursor, setCursor] = useState<string | null>(null);
   const [loadState, setLoadState] = useState<LoadState>("loading");
+  const [listLoading, setListLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const filtro = parseFiltro(params.filtro);
-  // Carros que faltavam quando "Faltam" foi aberto: continuam na lista
-  // mesmo depois de adicionados, até trocar de segmento ou atualizar.
-  const [missingSnapshot, setMissingSnapshot] = useState<Set<string> | null>(null);
+  const requestId = useRef(0);
 
-  const owns = useCallback((carId: string) => (collection.items[carId] ?? 0) > 0, [collection.items]);
+  const qty = useCallback((car: CarListItem) => collection.quantityOf(car), [collection]);
+
+  /** 1ª página do segmento atual (troca de segmento recomeça sem cursor). */
+  const loadList = useCallback(async () => {
+    if (!params.id) return;
+    const id = ++requestId.current;
+    const page = await listSerieCars(params.id, { filter: FILTER_API[filtro], pageSize: PAGE });
+    if (id !== requestId.current) return;
+    setCars(page.items);
+    setCounts(page.counts);
+    setCursor(page.nextCursor);
+  }, [params.id, filtro]);
+  // Sempre a versão atual (segmento em vigor) para a carga e o refresh.
+  const loadListRef = useRef(loadList);
+  loadListRef.current = loadList;
 
   const load = useCallback(
     async (mode: "initial" | "refresh") => {
       if (!params.id) return;
       if (mode === "initial") setLoadState("loading");
       try {
-        const [s, list, ownership] = await Promise.all([
-          getSerie(params.id),
-          listAllCarsBySerie(params.id),
-          getSerieOwnership(params.id),
-        ]);
+        const [s] = await Promise.all([getSerie(params.id), loadListRef.current()]);
         if (!s) {
           setLoadState("not-found");
           return;
         }
-        mergeOwnership(list, ownership);
         setSerie(s);
-        setCars(list);
-        setMissingSnapshot(null);
         setLoadState("ok");
       } catch {
         if (mode === "refresh") show({ type: "danger", message: "Não foi possível atualizar." });
         else setLoadState("error");
       }
     },
-    [params.id, show, mergeOwnership]
+    [params.id, show]
   );
 
   useEffect(() => {
     void load("initial");
   }, [load]);
 
-  const total = cars.length;
-  const ownedCount = useMemo(() => cars.filter((car) => owns(car.id)).length, [cars, owns]);
+  // Troca de segmento: recarrega só a lista.
+  const firstFilter = useRef(filtro);
+  useEffect(() => {
+    if (firstFilter.current === filtro) return;
+    firstFilter.current = filtro;
+    setListLoading(true);
+    loadList()
+      .catch(() => show({ type: "danger", message: "Não foi possível carregar as miniaturas." }))
+      .finally(() => setListLoading(false));
+  }, [filtro, loadList, show]);
+
+  const loadMore = useCallback(async () => {
+    if (!params.id || !cursor || loadingMore || listLoading) return;
+    const id = requestId.current;
+    setLoadingMore(true);
+    try {
+      const page = await listSerieCars(params.id, { filter: FILTER_API[filtro], cursor, pageSize: PAGE });
+      if (id !== requestId.current) return;
+      setCars((cur) => [...cur, ...page.items]);
+      setCursor(page.nextCursor);
+    } catch {
+      // Mantém o que já está na tela; o próximo fim de rolagem tenta de novo.
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [params.id, cursor, loadingMore, listLoading, filtro]);
+
+  // Contagens do servidor + os toques feitos nos cards desta tela.
+  const ownedDelta = useMemo(
+    () => cars.reduce((sum, car) => sum + (qty(car) > 0 ? 1 : 0) - ((car.quantity ?? 0) > 0 ? 1 : 0), 0),
+    [cars, qty]
+  );
+  const total = counts.total;
+  const ownedCount = Math.min(total, Math.max(0, counts.owned + ownedDelta));
   const missingCount = total - ownedCount;
   const complete = total > 0 && ownedCount === total;
 
@@ -108,26 +151,6 @@ export default function SerieScreen() {
     entryChecked.current = true;
     if (filtro === "faltam" && missingCount === 0) router.setParams({ filtro: "todos" });
   }, [loadState, filtro, missingCount, router]);
-
-  // Tira a foto dos que faltam ao entrar em "Faltam".
-  useEffect(() => {
-    if (loadState !== "ok") return;
-    if (filtro === "faltam" && missingSnapshot === null) {
-      setMissingSnapshot(new Set(cars.filter((car) => !owns(car.id)).map((car) => car.id)));
-    } else if (filtro !== "faltam" && missingSnapshot !== null) {
-      setMissingSnapshot(null);
-    }
-  }, [filtro, loadState, cars, owns, missingSnapshot]);
-
-  const visible = useMemo(() => {
-    if (filtro === "colecao") return cars.filter((car) => owns(car.id));
-    if (filtro === "faltam") {
-      return missingSnapshot
-        ? cars.filter((car) => missingSnapshot.has(car.id))
-        : cars.filter((car) => !owns(car.id));
-    }
-    return cars;
-  }, [filtro, cars, owns, missingSnapshot]);
 
   const refresh = useCallback(async () => {
     setRefreshing(true);
@@ -286,13 +309,15 @@ export default function SerieScreen() {
     <ScreenContainer bg="bg" edges={["bottom"]} className="bg-bg">
       <Header variant="stack" title={serie.title} backFallback="/series" />
       <FlashList
-        data={visible}
+        data={listLoading ? [] : cars}
         numColumns={grid.columns}
         keyExtractor={(item) => item.id}
-        extraData={collection.items}
+        extraData={collection.version}
+        onEndReached={loadMore}
+        onEndReachedThreshold={0.6}
         contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
         ListHeaderComponent={listHeader}
-        ListEmptyComponent={empty}
+        ListEmptyComponent={listLoading ? <CarGridSkeleton /> : empty}
         refreshControl={
           <RefreshControl tintColor={c("primary")} refreshing={refreshing} onRefresh={refresh} />
         }
@@ -302,7 +327,7 @@ export default function SerieScreen() {
               car={item}
               variant="grid"
               width={grid.itemWidth}
-              inCollection={owns(item.id)}
+              inCollection={qty(item) > 0}
               onPress={() => router.push(`/car/${item.id}`)}
               onToggleCollection={() => heart.onToggle(item)}
             />
