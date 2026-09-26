@@ -167,13 +167,13 @@ function IllustrateCatalog() {
     <View className="items-center justify-center w-full">
       <View className="flex-row items-end justify-center gap-2">
         <View style={{ transform: [{ rotate: "-6deg" }], opacity: 0.95 }}>
-          <MockCard collector="001" title="'71 Datsun" />
+          <MockCard code="JJH51" title="'71 Datsun" />
         </View>
         <View style={{ marginBottom: 12 }}>
-          <MockCard collector="024" title="Skyline R34" highlighted />
+          <MockCard code="HKJ42" title="Skyline R34" highlighted />
         </View>
         <View style={{ transform: [{ rotate: "6deg" }], opacity: 0.95 }}>
-          <MockCard collector="107" title="RX-7 FD" />
+          <MockCard code="HRY58" title="RX-7 FD" />
         </View>
       </View>
     </View>
@@ -234,7 +234,7 @@ function IllustrateShare() {
   );
 }
 
-function MockCard({ collector, title, highlighted }: { collector: string; title: string; highlighted?: boolean }) {
+function MockCard({ code, title, highlighted }: { code: string; title: string; highlighted?: boolean }) {
   return (
     <View
       className={`rounded-md bg-surface-2 border ${highlighted ? "border-primary" : "border-border"} overflow-hidden`}
@@ -244,7 +244,7 @@ function MockCard({ collector, title, highlighted }: { collector: string; title:
         <LogoCar width={64} />
       </View>
       <View className="p-1.5">
-        <Text variant="caption" tone="accent" className="font-mono">#{collector}</Text>
+        <Text variant="caption" tone="accent" className="font-mono">{code}</Text>
         <Text variant="caption" numberOfLines={1}>{title}</Text>
       </View>
     </View>

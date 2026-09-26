@@ -107,7 +107,7 @@ export function CarCard({
         ? ", na sua coleção"
         : "";
   const huntSuffix = hunt ? `, ${hunt.spokenName}` : "";
-  const a11yLabel = `${car.title}, ${car.brandName}, ${car.year}, número ${car.collector}${huntSuffix}${collectionSuffix}`;
+  const a11yLabel = `${car.title}, ${car.brandName}, ${car.year}, código ${car.toy}${huntSuffix}${collectionSuffix}`;
 
   return (
     <Pressable
@@ -124,12 +124,14 @@ export function CarCard({
     >
       <View className="relative">
         <CarImage uri={car.imagemThumb} className="w-full aspect-card" />
-        {/* collector badge accent — canto superior esquerdo */}
-        <View className="absolute top-2 left-2">
-          <Badge variant="accent" size="sm">
-            #{car.collector}
-          </Badge>
-        </View>
+        {/* código do brinquedo (toy) — canto superior esquerdo */}
+        {car.toy ? (
+          <View className="absolute top-2 left-2">
+            <Badge variant="accent" size="sm">
+              {car.toy}
+            </Badge>
+          </View>
+        ) : null}
         {/* favorite — canto superior direito */}
         {!isCollection && onToggleCollection ? (
           <View className="absolute top-2 right-2">

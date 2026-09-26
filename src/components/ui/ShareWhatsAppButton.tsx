@@ -20,7 +20,6 @@ type CarData = {
   title: string;
   brandName?: string;
   year: number;
-  collector: string;
   toy: string;
   serieTitle?: string;
 };
@@ -40,15 +39,12 @@ function buildMessage(car: CarData): string {
   const eyebrowParts: string[] = [];
   if (car.brandName) eyebrowParts.push(car.brandName);
   if (car.year) eyebrowParts.push(String(car.year));
-  if (car.collector) eyebrowParts.push(`#${car.collector}`);
+  if (car.toy) eyebrowParts.push(car.toy);
   if (eyebrowParts.length > 0) {
     lines.push(eyebrowParts.join(" · "));
   }
   if (car.serieTitle) {
     lines.push(`Série: ${car.serieTitle}`);
-  }
-  if (car.toy) {
-    lines.push(`Código: ${car.toy}`);
   }
   return lines.join("\n");
 }

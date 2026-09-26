@@ -457,7 +457,6 @@ export default function Colecao() {
                   title: car.title,
                   brandName,
                   year: car.year,
-                  collector: car.collector,
                   toy: car.toy,
                   serieTitle,
                 });

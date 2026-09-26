@@ -381,9 +381,6 @@ export default function CarDetalhe() {
                 }
               />
             ) : null}
-            {detail.collector ? (
-              <InfoRow icon={Hash} label="Número" value={`#${detail.collector}`} copyable />
-            ) : null}
             {detail.toy ? (
               <InfoRow icon={Hash} label="Código (toy)" value={detail.toy} copyable mono />
             ) : null}
@@ -517,7 +514,6 @@ export default function CarDetalhe() {
                 title: detail.title,
                 brandName: detail.brand.name,
                 year: detail.year,
-                collector: detail.collector,
                 toy: detail.toy,
                 serieTitle: detail.serie.title,
               }}
