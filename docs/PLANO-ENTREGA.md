@@ -78,6 +78,9 @@ Guia vivo: o Orquestrador atualiza este arquivo a cada lote entregue. As referê
 - **Notificações do lote 2:** "novo anúncio que tem um carro que você deseja", "seu anúncio foi finalizado" e similares.
 
 ### Lote 4: Dívidas e polimento
+- **Limpeza do legado (depois do lote 3):**
+  - remover a coluna `users.expo_push_token` (tokens do app antigo, inúteis no app novo; a v2 usa `push_tokens`);
+  - remover os módulos antigos `news`, `trade`, `notifications` e `garage` do `backendToSave`, e as tabelas `garages` e `garages_item`, se as garagens continuarem fora.
 - **Segredos:** trocar a senha do Postgres e a `APPWRITE_API_KEY`.
 - **Site:** página de política de privacidade e o link no rodapé.
 - **Painel:** os ajustes de uso que aparecerem.
