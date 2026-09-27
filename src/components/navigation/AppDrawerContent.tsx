@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { DrawerContentComponentProps } from "expo-router/drawer";
 import { useTheme, ThemeScope } from "@/theme/ThemeProvider";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useUnreadNotificationsCount } from "@/hooks/useNotifications";
 import { DRAWER_ITEMS, type DrawerItem } from "@/navigation/drawerItems";
 import { Avatar, deriveAvatarInitials } from "@/components/ui/Avatar";
 import { CountBadge } from "@/components/ui/Badge";
@@ -25,6 +26,9 @@ export function AppDrawerContent({ state, navigation }: DrawerContentComponentPr
   const insets = useSafeAreaInsets();
   const { user } = useCurrentUser();
   const [signOutOpen, setSignOutOpen] = useState(false);
+  // Só para re-renderizar quando a contagem mudar — os itens leem o
+  // valor atual direto de `item.badge()` (`getUnreadNotificationsSnapshot`).
+  useUnreadNotificationsCount();
 
   const activeName = state.routes[state.index]?.name;
 

@@ -56,8 +56,8 @@ type Props = {
   logo?: boolean;
   /** `root`: faixa ink (Home). */
   ink?: boolean;
-  /** `root`: ação única à direita. */
-  action?: RootHeaderAction;
+  /** `root`: uma ação à direita, ou várias lado a lado. */
+  action?: RootHeaderAction | RootHeaderAction[];
   /** Destino do voltar quando não há histórico (deep link). */
   backFallback?: Href;
 };

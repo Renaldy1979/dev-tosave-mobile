@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { getNewsById } from "@/services";
 import type { NewsItem } from "@/types";
 import { openExternal } from "@/utils/openExternal";
-import { formatNewsDateLong } from "@/utils/formatDate";
+import { formatDateLong } from "@/utils/formatDate";
 import { useDelayedFlag } from "@/hooks/useDelayedFlag";
 import { ScreenContainer } from "@/components/ui/ScreenContainer";
 import { Header } from "@/components/ui/Header";
@@ -126,7 +126,7 @@ export default function NoticiaDetalhe() {
         ) : null}
         <View className="px-4 pt-5 gap-3">
           <Text variant="caption" tone="muted">
-            {formatNewsDateLong(news.publishedAt)}
+            {formatDateLong(news.publishedAt)}
           </Text>
           <Text variant="display-md" className="font-display-black">
             {news.title}

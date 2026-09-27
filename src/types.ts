@@ -217,6 +217,23 @@ export interface NewsItem {
   publishedAt: string;
 }
 
+// ---------- Notificações ----------
+
+/**
+ * Item da caixa de notificações (`/v2/notifications`). `type` decide a
+ * rota do toque (`targetId` é o id do alvo, ex.: da notícia); `"news"`
+ * é o único tipo por enquanto, mais tipos vêm no lote 3 (troca).
+ */
+export interface NotificationItem {
+  id: string;
+  title: string;
+  body: string;
+  read: boolean;
+  type: string;
+  targetId: string | null;
+  createdAt: string;
+}
+
 // ---------- Sessão de auth ----------
 
 /**

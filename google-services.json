@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "389486995347",
+    "project_id": "tosave-mobile",
+    "storage_bucket": "tosave-mobile.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:389486995347:android:aef221e7c1b35ebed9aa66",
+        "android_client_info": {
+          "package_name": "cloud.tosave.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCVRhrrZVI5Hg3dthfTXu0jTgAF0AM1LeM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

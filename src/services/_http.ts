@@ -53,7 +53,7 @@ async function getJwt(force = false): Promise<string> {
 type Query = Record<string, string | number | boolean | undefined | null | string[] | number[]>;
 
 export type ApiRequest = {
-  method?: "GET" | "POST" | "PUT" | "DELETE";
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   query?: Query;
   body?: unknown;
   /** Rota pública (sem JWT), ex.: `/v2/config`. */

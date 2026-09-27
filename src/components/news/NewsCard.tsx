@@ -2,7 +2,7 @@ import { Pressable, View } from "react-native";
 import { Text } from "../ui/Text";
 import { Skeleton } from "../ui/Skeleton";
 import { NewsImage } from "./NewsImage";
-import { formatNewsDate } from "@/utils/formatDate";
+import { formatDateShort } from "@/utils/formatDate";
 
 /**
  * Card de notícia: imagem 88×88, título, data e resumo. Usado no feed
@@ -19,7 +19,7 @@ type Props = {
 const IMAGE_SIZE = 88;
 
 export function NewsCard({ title, summary, publishedAt, image, onPress }: Props) {
-  const date = formatNewsDate(publishedAt);
+  const date = formatDateShort(publishedAt);
   return (
     <Pressable
       accessibilityRole="button"

@@ -1,5 +1,6 @@
 import type { Href } from "expo-router";
 import {
+  Bell,
   ChartColumn,
   Heart,
   Home,
@@ -9,6 +10,7 @@ import {
   User,
   type LucideIcon,
 } from "lucide-react-native";
+import { getUnreadNotificationsSnapshot } from "@/hooks/useNotifications";
 
 /**
  * Itens do menu lateral (`docs/design/telas/09-menu-drawer.md` §2.3 e
@@ -36,6 +38,13 @@ export const DRAWER_ITEMS: DrawerItem[] = [
   { name: "series", route: "/series", label: "Séries", icon: Layers },
   { name: "colecao", route: "/colecao", label: "Minha coleção", icon: Heart },
   { name: "noticias", route: "/noticias", label: "Notícias", icon: Newspaper },
+  {
+    name: "notificacoes",
+    route: "/notificacoes",
+    label: "Notificações",
+    icon: Bell,
+    badge: getUnreadNotificationsSnapshot,
+  },
   { name: "estatisticas", route: "/estatisticas", label: "Estatísticas", icon: ChartColumn },
   { name: "perfil", route: "/perfil", label: "Perfil", icon: User },
 ];

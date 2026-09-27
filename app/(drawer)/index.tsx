@@ -2,12 +2,13 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, View } from "react-native";
 import { FlashList } from "@shopify/flash-list";
 import { useRouter } from "expo-router";
-import { ChevronRight, Search } from "lucide-react-native";
+import { Bell, ChevronRight, Search } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/theme/ThemeProvider";
 import { listCarsPaged, listLatestNews, listSeries } from "@/services";
 import type { CarListItem, NewsItem, Serie } from "@/types";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { refreshUnreadNotifications, useUnreadNotificationsCount } from "@/hooks/useNotifications";
 import { useDelayedFlag } from "@/hooks/useDelayedFlag";
 import { useGridLayout } from "@/hooks/useGridColumns";
 import { useCollectionStore } from "@/hooks/useCollectionStore";
@@ -45,6 +46,7 @@ export default function Home() {
   const router = useRouter();
   const { user, refresh: refreshUser } = useCurrentUser();
   const collection = useCollectionStore();
+  const unreadCount = useUnreadNotificationsCount();
   const { show } = useToast();
   const grid = useGridLayout();
   // Sem TabBar: só a safe area inferior + respiro.
@@ -123,6 +125,7 @@ export default function Home() {
     void loadSeries();
     void loadNews();
     void loadCarsPage(null, true);
+    void refreshUnreadNotifications();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -135,6 +138,7 @@ export default function Home() {
         loadCarsPage(null, true),
         collection.refreshSummary(),
         refreshUser(),
+        refreshUnreadNotifications(),
       ]);
     } catch {
       show({ type: "danger", message: "Não foi possível atualizar." });
@@ -166,11 +170,19 @@ export default function Home() {
         variant="root"
         ink
         logo
-        action={{
-          icon: Search,
-          accessibilityLabel: "Buscar miniaturas",
-          onPress: () => router.navigate("/busca?focus=1"),
-        }}
+        action={[
+          {
+            icon: Search,
+            accessibilityLabel: "Buscar miniaturas",
+            onPress: () => router.navigate("/busca?focus=1"),
+          },
+          {
+            icon: Bell,
+            accessibilityLabel: "Notificações",
+            badge: unreadCount,
+            onPress: () => router.push("/notificacoes"),
+          },
+        ]}
       />
       <FlashList
         data={data}

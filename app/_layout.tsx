@@ -25,6 +25,7 @@ import { ToastProvider } from "@/components/ui/Toast";
 import { CollectionProvider } from "@/hooks/useCollectionStore";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { loadAppConfig } from "@/hooks/useAppConfig";
+import { PushNotificationsGate } from "@/components/navigation/PushNotificationsGate";
 
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
@@ -97,6 +98,7 @@ export default function RootLayout() {
                   />
                 </Stack>
                 <AuthGate />
+                <PushNotificationsGate />
               </CollectionProvider>
             </ToastProvider>
           </BottomSheetModalProvider>

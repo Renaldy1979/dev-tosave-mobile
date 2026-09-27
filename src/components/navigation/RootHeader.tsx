@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme, ThemeScope } from "@/theme/ThemeProvider";
 import { elevation } from "@/theme/elevation";
 import { IconButton } from "@/components/ui/IconButton";
+import { CountBadge } from "@/components/ui/Badge";
 import { Logo } from "@/components/ui/Logo";
 import { Text } from "@/components/ui/Text";
 
@@ -24,6 +25,8 @@ export type RootHeaderAction = {
   icon: LucideIcon;
   accessibilityLabel: string;
   onPress: () => void;
+  /** Contador (ex.: notificações não lidas); omitido ou 0 = sem badge. */
+  badge?: number;
 };
 
 type Props = {
@@ -31,7 +34,8 @@ type Props = {
   /** Mostra a Logo no lugar do título (Home). */
   logo?: boolean;
   ink?: boolean;
-  action?: RootHeaderAction;
+  /** Uma ação, ou várias lado a lado (ex.: Buscar + sino de notificações). */
+  action?: RootHeaderAction | RootHeaderAction[];
 };
 
 type DrawerNavigation = { openDrawer: () => void };
@@ -46,6 +50,8 @@ export function RootHeader({ title, logo = false, ink = false, action }: Props) 
     Keyboard.dismiss();
     navigation.openDrawer();
   };
+
+  const actions = action ? (Array.isArray(action) ? action : [action]) : [];
 
   const bar = (
     <View
@@ -69,13 +75,12 @@ export function RootHeader({ title, logo = false, ink = false, action }: Props) 
           </Text>
         ) : null}
       </View>
-      {action ? (
-        <IconButton
-          icon={action.icon}
-          size="lg"
-          accessibilityLabel={action.accessibilityLabel}
-          onPress={action.onPress}
-        />
+      {actions.length > 0 ? (
+        <View className="flex-row items-center">
+          {actions.map((a, i) => (
+            <ActionButton key={i} {...a} />
+          ))}
+        </View>
       ) : (
         <View style={{ width: 44 }} />
       )}
@@ -95,6 +100,24 @@ export function RootHeader({ title, logo = false, ink = false, action }: Props) 
       style={[elevation("e2", scheme), { zIndex: 1 }]}
     >
       {bar}
+    </View>
+  );
+}
+
+function ActionButton({ icon, accessibilityLabel, onPress, badge }: RootHeaderAction) {
+  return (
+    <View>
+      <IconButton
+        icon={icon}
+        size="lg"
+        accessibilityLabel={badge ? `${accessibilityLabel}, ${badge} novas` : accessibilityLabel}
+        onPress={onPress}
+      />
+      {badge ? (
+        <View pointerEvents="none" style={{ position: "absolute", top: 4, right: 4 }}>
+          <CountBadge count={badge} />
+        </View>
+      ) : null}
     </View>
   );
 }

@@ -84,3 +84,13 @@ export type { UpdateProfileInput, UpdateProfileResult } from "./users";
 
 export { getNewsById, listLatestNews, listNewsPaged } from "./news";
 export type { PaginatedNews } from "./news";
+
+export {
+  getUnreadNotificationsCount,
+  listNotificationsPaged,
+  markAllNotificationsRead,
+  markNotificationRead,
+  registerPushToken,
+  unregisterPushToken,
+} from "./notifications";
+export type { PaginatedNotifications } from "./notifications";
