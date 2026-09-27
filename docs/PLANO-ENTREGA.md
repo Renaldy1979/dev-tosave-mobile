@@ -35,7 +35,7 @@ Guia vivo: o Orquestrador atualiza este arquivo a cada lote entregue. As referê
 
 ## Lotes
 
-### Lote 0: segurança e ajustes (agora)
+### Lote 0: segurança e ajustes (entregue em 27/09)
 - **Desligar as rotas antigas** `news`, `trade`, `notifications` e `garagens`, que estão ativas em produção e têm três falhas graves:
   - push para todos sem ser admin;
   - anúncio em nome de outro usuário;
@@ -45,7 +45,7 @@ Guia vivo: o Orquestrador atualiza este arquivo a cada lote entregue. As referê
 - **Vitrine enxuta:** já enviada. *(deploy do `tosave-web`)*
 - **Atualizar o papel do Forja** para a arquitetura v2, antes de ele pegar o lote 1. *(Orquestrador)*
 
-### Lote 1: Notícias
+### Lote 1: Notícias (em andamento desde 27/09)
 - **Backend:** `/v2/news`, com lista paginada, detalhe e só as publicadas; `/admin/news`, com criar, editar, publicar ou despublicar, apagar e imagem no Storage. **Só admin publica.**
 - **Painel:** tela de Notícias, com lista, editor e imagem.
 - **Mobile:** feed de notícias e detalhe; o link externo abre no navegador.
@@ -91,7 +91,7 @@ Guia vivo: o Orquestrador atualiza este arquivo a cada lote entregue. As referê
 - Build de produção do Android na Play Store e depois do iOS.
 - Ícones, capturas de tela, política de privacidade e versão mínima pelo `app_config`.
 
-## Decisões de produto pendentes (bloqueiam os lotes 1 a 3)
+## Decisões de produto (aprovadas pelo usuário em 27/09/2026: todas conforme a recomendação; #8 = uso zero, tabelas v2 redesenhadas sem migrar dados)
 
 | # | Pergunta | Recomendação |
 |---|---|---|
