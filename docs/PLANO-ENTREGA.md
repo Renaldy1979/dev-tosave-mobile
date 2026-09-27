@@ -45,13 +45,13 @@ Guia vivo: o Orquestrador atualiza este arquivo a cada lote entregue. As referê
 - **Vitrine enxuta:** já enviada. *(deploy do `tosave-web`)*
 - **Atualizar o papel do Forja** para a arquitetura v2, antes de ele pegar o lote 1. *(Orquestrador)*
 
-### Lote 1: Notícias (em andamento desde 27/09)
+### Lote 1: Notícias (entregue em 27/09)
 - **Backend:** `/v2/news`, com lista paginada, detalhe e só as publicadas; `/admin/news`, com criar, editar, publicar ou despublicar, apagar e imagem no Storage. **Só admin publica.**
 - **Painel:** tela de Notícias, com lista, editor e imagem.
 - **Mobile:** feed de notícias e detalhe; o link externo abre no navegador.
 - **Site (opcional):** as últimas notícias na home, como prova de comunidade viva e ajuda no SEO.
 
-### Lote 2: Notificações (base para a troca)
+### Lote 2: Notificações (base para a troca) (em andamento desde 27/09)
 - **Backend:**
   - registro do token de push do Expo por usuário;
   - envio **só pelo servidor**, por eventos, sem rota aberta de envio;
