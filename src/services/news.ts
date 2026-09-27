@@ -3,10 +3,9 @@ import { api } from "./_http";
 import type { NewsItem } from "@/types";
 
 /**
- * Notícias — backend próprio, rotas `/v2/news` (contrato confirmado
- * pelo Alicerce em 27/09/2026; `docs/API-V2.md` ainda vai publicar a
- * seção). Sem login: qualquer usuário autenticado lê; só o painel
- * admin cria/edita/publica.
+ * Notícias — backend próprio, rotas `/v2/news` (`docs/API-V2.md`
+ * §Notícias). Rota pública: não exige `Authorization` (um JWT enviado
+ * seria ignorado), por isso `auth: false` nas duas chamadas.
  *
  * A API só devolve notícias com `published = true`, mais recentes
  * primeiro. Paginação por cursor opaco: `{ items, total, nextCursor }`,
@@ -50,6 +49,7 @@ export async function listNewsPaged(
 ): Promise<PaginatedNews> {
   const page = await api<ApiPage<ApiNews>>("/v2/news", {
     query: { cursor: options.cursor, limit: options.pageSize ?? 20 },
+    auth: false,
   });
   return { items: page.items.map(apiNewsToItem), total: page.total, nextCursor: page.nextCursor };
 }
@@ -63,7 +63,7 @@ export async function listLatestNews(limit = 3): Promise<NewsItem[]> {
 /** Detalhe; `null` quando não existe ou não está publicada (mesma resposta, 404). */
 export async function getNewsById(id: string): Promise<NewsItem | null> {
   try {
-    return apiNewsToItem(await api<ApiNews>(`/v2/news/${encodeURIComponent(id)}`));
+    return apiNewsToItem(await api<ApiNews>(`/v2/news/${encodeURIComponent(id)}`, { auth: false }));
   } catch (err) {
     if (isNotFound(err)) return null;
     throw err;
