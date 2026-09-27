@@ -25,7 +25,6 @@
         "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#0B0B0D"
       },
-      "edgeToEdgeEnabled": true,
       "package": "cloud.tosave.app",
       "googleServicesFile": "./google-services.json"
     },
