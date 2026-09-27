@@ -4,6 +4,7 @@ import {
   Heart,
   Home,
   Layers,
+  Newspaper,
   Search,
   User,
   type LucideIcon,
@@ -34,6 +35,7 @@ export const DRAWER_ITEMS: DrawerItem[] = [
   { name: "busca", route: "/busca", label: "Buscar", icon: Search },
   { name: "series", route: "/series", label: "Séries", icon: Layers },
   { name: "colecao", route: "/colecao", label: "Minha coleção", icon: Heart },
+  { name: "noticias", route: "/noticias", label: "Notícias", icon: Newspaper },
   { name: "estatisticas", route: "/estatisticas", label: "Estatísticas", icon: ChartColumn },
   { name: "perfil", route: "/perfil", label: "Perfil", icon: User },
 ];

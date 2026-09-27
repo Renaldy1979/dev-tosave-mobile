@@ -18,6 +18,7 @@ type ExpoExtra = {
   appwriteProjectId?: string;
   appwriteBucketImages?: string;
   appwriteBucketSeriesLogos?: string;
+  appwriteBucketNewsImages?: string;
 };
 
 const extra = (Constants.expoConfig?.extra ?? {}) as ExpoExtra;
@@ -31,6 +32,7 @@ export const APPWRITE_PROJECT_ID: string = ENV_PROJECT_ID || extra.appwriteProje
 
 const BUCKET_CAR_IMAGES = extra.appwriteBucketImages ?? "car-images";
 const BUCKET_SERIES_LOGOS = extra.appwriteBucketSeriesLogos ?? "series-logos";
+const BUCKET_NEWS_IMAGES = extra.appwriteBucketNewsImages ?? "news-images";
 
 /**
  * URL de preview (WebP redimensionado) de um arquivo público do Storage,
@@ -56,6 +58,12 @@ export function carImageUrl(fileId: string | null | undefined, size: "grid" | "f
 /** Logo de série (`series-logos`, 150×150 com transparência): 300/90. */
 export function serieLogoUrl(fileId: string | null | undefined): string {
   return fileId ? previewUrl(BUCKET_SERIES_LOGOS, fileId, 300, 90) : "";
+}
+
+/** Imagem de notícia (`news-images`): feed/lista 800/80, detalhe 1080/85. */
+export function newsImageUrl(fileId: string | null | undefined, size: "list" | "detail"): string | null {
+  if (!fileId) return null;
+  return size === "detail" ? previewUrl(BUCKET_NEWS_IMAGES, fileId, 1080, 85) : previewUrl(BUCKET_NEWS_IMAGES, fileId, 800, 80);
 }
 
 export const client = new Client();

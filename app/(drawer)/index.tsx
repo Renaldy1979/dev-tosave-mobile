@@ -5,8 +5,8 @@ import { useRouter } from "expo-router";
 import { ChevronRight, Search } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/theme/ThemeProvider";
-import { listCarsPaged, listSeries } from "@/services";
-import type { CarListItem, Serie } from "@/types";
+import { listCarsPaged, listLatestNews, listSeries } from "@/services";
+import type { CarListItem, NewsItem, Serie } from "@/types";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useDelayedFlag } from "@/hooks/useDelayedFlag";
 import { useGridLayout } from "@/hooks/useGridColumns";
@@ -24,12 +24,15 @@ import { ErrorState } from "@/components/ui/ErrorState";
 import { CarCard } from "@/components/car/CarCard";
 import { CarGridSkeleton } from "@/components/car/CarCardSkeleton";
 import { SeriesCard } from "@/components/car/SeriesCard";
+import { NewsCard, NewsCardSkeleton } from "@/components/news/NewsCard";
 import { useToast } from "@/components/ui/Toast";
 
 const PAGE_SIZE = 20;
+const LATEST_NEWS_LIMIT = 3;
 
 type SeriesState = "loading" | "ok" | "error" | "empty";
 type GridState = "loading" | "ok" | "error" | "empty" | "loadingMore";
+type NewsState = "loading" | "ok" | "error" | "empty";
 
 /**
  * Home (`docs/design/telas/03-home.md`).
@@ -51,6 +54,9 @@ export default function Home() {
   const [series, setSeries] = useState<Serie[]>([]);
   const [seriesCount, setSeriesCount] = useState<Record<string, number>>({});
   const [seriesState, setSeriesState] = useState<SeriesState>("loading");
+
+  const [news, setNews] = useState<NewsItem[]>([]);
+  const [newsState, setNewsState] = useState<NewsState>("loading");
 
   const [cars, setCars] = useState<CarListItem[]>([]);
   // Resumo buscado ao abrir a Home (a contagem "N na sua coleção").
@@ -81,6 +87,17 @@ export default function Home() {
     }
   }, []);
 
+  const loadNews = useCallback(async () => {
+    setNewsState("loading");
+    try {
+      const list = await listLatestNews(LATEST_NEWS_LIMIT);
+      setNews(list);
+      setNewsState(list.length === 0 ? "empty" : "ok");
+    } catch {
+      setNewsState("error");
+    }
+  }, []);
+
   const loadCarsPage = useCallback(
     async (cursor: string | null, replace: boolean) => {
       setGridState((prev) => (cursor === null ? "loading" : "loadingMore"));
@@ -104,6 +121,7 @@ export default function Home() {
 
   useEffect(() => {
     void loadSeries();
+    void loadNews();
     void loadCarsPage(null, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -113,6 +131,7 @@ export default function Home() {
     try {
       await Promise.all([
         loadSeries(),
+        loadNews(),
         loadCarsPage(null, true),
         collection.refreshSummary(),
         refreshUser(),
@@ -122,7 +141,7 @@ export default function Home() {
     } finally {
       setRefreshing(false);
     }
-  }, [loadSeries, loadCarsPage, collection, refreshUser, show]);
+  }, [loadSeries, loadNews, loadCarsPage, collection, refreshUser, show]);
 
   // ---------- Interações ----------
   const handleEndReached = () => {
@@ -192,6 +211,11 @@ export default function Home() {
             onAllSeriesPress={() => router.navigate("/series")}
             collectionCount={collectionCount}
             showSeriesSkeleton={showSeriesSkeleton}
+            newsState={newsState}
+            news={news}
+            onRetryNews={loadNews}
+            onNewsPress={(id) => router.push(`/noticia/${id}`)}
+            onAllNewsPress={() => router.navigate("/noticias")}
           />
         }
         ListFooterComponent={
@@ -235,6 +259,11 @@ function HomeHeader(props: {
   onAllSeriesPress: () => void;
   collectionCount: number;
   showSeriesSkeleton: boolean;
+  newsState: NewsState;
+  news: NewsItem[];
+  onRetryNews: () => void;
+  onNewsPress: (id: string) => void;
+  onAllNewsPress: () => void;
 }) {
   const { c } = useTheme();
   return (
@@ -300,6 +329,51 @@ function HomeHeader(props: {
             ) : props.seriesState === "ok" && props.series.length > 0 ? (
               <SeriesRail series={props.series} counts={props.seriesCount} onPress={props.onSeriesPress} />
             ) : null}
+          </View>
+        ) : null}
+
+        {/* últimas notícias */}
+        {props.newsState !== "empty" ? (
+          <View className="mt-6">
+            <View className="flex-row items-center justify-between mb-3">
+              <Text variant="eyebrow" tone="ink" className="text-ink-fg/60">
+                ÚLTIMAS NOTÍCIAS
+              </Text>
+              <Pressable
+                accessibilityRole="link"
+                accessibilityLabel="Ver todas as notícias"
+                onPress={props.onAllNewsPress}
+                hitSlop={12}
+                style={{ minHeight: 44, minWidth: 44 }}
+                className="flex-row items-center pl-3 active:opacity-70"
+              >
+                <Text variant="body-sm" tone="primary" className="font-sans-medium">
+                  Ver tudo
+                </Text>
+                <ChevronRight color={c("primary-text")} size={16} strokeWidth={1.75} />
+              </Pressable>
+            </View>
+            {props.newsState === "loading" ? (
+              <View style={{ gap: 8 }}>
+                <NewsCardSkeleton />
+                <NewsCardSkeleton />
+              </View>
+            ) : props.newsState === "error" ? (
+              <ErrorState size="sm" title="Notícias indisponíveis" onRetry={props.onRetryNews} />
+            ) : (
+              <View style={{ gap: 8 }}>
+                {props.news.map((item) => (
+                  <NewsCard
+                    key={item.id}
+                    title={item.title}
+                    summary={item.summary}
+                    publishedAt={item.publishedAt}
+                    image={item.imagem}
+                    onPress={() => props.onNewsPress(item.id)}
+                  />
+                ))}
+              </View>
+            )}
           </View>
         ) : null}
 

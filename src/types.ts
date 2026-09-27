@@ -192,6 +192,31 @@ export interface CollectionSummary {
   duplicates: number;
 }
 
+// ---------- Notícias ----------
+
+/**
+ * Notícia publicada (`/v2/news`, só admin publica). A API só devolve
+ * notícias com `published = true`; `imageFileId` já vem resolvido em
+ * URL de preview do Appwrite Storage (bucket `news-images`, mesmo
+ * padrão de `cars`/`series`).
+ */
+export interface NewsItem {
+  id: string;
+  title: string;
+  /** Resumo curto para o card do feed e da Home. Pode vir "". */
+  summary: string;
+  /** Corpo completo, exibido no detalhe. Pode vir "". */
+  content: string;
+  /** Preview 800w, para o feed e a seção da Home. */
+  imagem: string | null;
+  /** Preview 1080w, para o detalhe. */
+  imagemFull: string | null;
+  /** Link externo opcional ("Abrir matéria"). */
+  link: string | null;
+  /** ISO 8601. */
+  publishedAt: string;
+}
+
 // ---------- Sessão de auth ----------
 
 /**

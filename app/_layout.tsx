@@ -87,6 +87,14 @@ export default function RootLayout() {
                       fullScreenGestureEnabled: true,
                     }}
                   />
+                  <Stack.Screen
+                    name="noticia/[id]"
+                    options={{
+                      animation: "slide_from_right",
+                      gestureEnabled: true,
+                      fullScreenGestureEnabled: true,
+                    }}
+                  />
                 </Stack>
                 <AuthGate />
               </CollectionProvider>
@@ -100,9 +108,9 @@ export default function RootLayout() {
 
 /**
  * AuthGate — redireciona para `/login` quando a sessão cai enquanto
- * o usuário está numa rota protegida ((drawer), car/[id], serie/[id] ou excluir-conta). O splash
- * (`app/index.tsx`) já cuida da entrada inicial; o cadasto
- * (`/cadastro`) também fica acessível sem sessão.
+ * o usuário está numa rota protegida ((drawer), car/[id], serie/[id], noticia/[id] ou
+ * excluir-conta). O splash (`app/index.tsx`) já cuida da entrada
+ * inicial; o cadasto (`/cadastro`) também fica acessível sem sessão.
  */
 function AuthGate() {
   const router = useRouter();
@@ -112,11 +120,12 @@ function AuthGate() {
   useEffect(() => {
     if (user) return;
     const top = segments[0];
-    // Rotas que exigem sessão: (drawer), detalhe do carro e tela da série. `/login`,
-    // `/cadastro`, `/onboarding` e `/` (splash) ficam acessíveis
-    // sem sessão para que o usuário possa entrar ou criar conta.
+    // Rotas que exigem sessão: (drawer), detalhe do carro, tela da série
+    // e detalhe da notícia. `/login`, `/cadastro`, `/onboarding` e `/`
+    // (splash) ficam acessíveis sem sessão para que o usuário possa
+    // entrar ou criar conta.
     const protectedRoute =
-      top === "(drawer)" || top === "car" || top === "serie" || top === "excluir-conta";
+      top === "(drawer)" || top === "car" || top === "serie" || top === "noticia" || top === "excluir-conta";
     if (protectedRoute) {
       // Sessão caiu durante o uso → Login com o aviso do motivo:
       // reason=expired ("Sua sessão expirou.") ou reason=blocked
