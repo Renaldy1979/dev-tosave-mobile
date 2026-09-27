@@ -51,7 +51,7 @@ Guia vivo: o Orquestrador atualiza este arquivo a cada lote entregue. As referê
 - **Mobile:** feed de notícias e detalhe; o link externo abre no navegador.
 - **Site (opcional):** as últimas notícias na home, como prova de comunidade viva e ajuda no SEO.
 
-### Lote 2: Notificações (base para a troca) (em andamento desde 27/09)
+### Lote 2: Notificações (entregue em 27/09)
 - **Backend:**
   - registro do token de push do Expo por usuário;
   - envio **só pelo servidor**, por eventos, sem rota aberta de envio;
@@ -62,7 +62,7 @@ Guia vivo: o Orquestrador atualiza este arquivo a cada lote entregue. As referê
   - caixa de notificações com badge;
   - o toque na notificação leva à tela certa.
 
-### Lote 3: Clube da Troca
+### Lote 3: Clube da Troca (em andamento desde 27/09)
 - **Backend `/v2/trade`:**
   - anúncio de **troca ou venda** de um carro **da própria coleção**;
   - carros desejados;
