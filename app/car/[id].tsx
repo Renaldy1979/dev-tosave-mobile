@@ -10,7 +10,7 @@ import {
   useLocalSearchParams,
   useRouter,
 } from "expo-router";
-import { Archive, Calendar, Hash, Layers, Palette, Ruler, Sparkles, Tag } from "lucide-react-native";
+import { Archive, ArrowLeftRight, Calendar, Hash, Layers, Palette, Ruler, Sparkles, Tag } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
 import Animated, {
   useAnimatedScrollHandler,
@@ -313,6 +313,19 @@ export default function CarDetalhe() {
             onChange={handleChangeQuantity}
             onRemove={handleRemove}
           />
+        ) : null}
+
+        {/* Anunciar no Clube da Troca (lote 3) — só quem tem na coleção. */}
+        {inCollection ? (
+          <View className="px-4 mt-3">
+            <Button
+              label="Anunciar no Clube da Troca"
+              variant="outline"
+              size="md"
+              leftIcon={ArrowLeftRight}
+              onPress={() => router.push({ pathname: "/anuncio/novo", params: { carId: detail.id } })}
+            />
+          </View>
         ) : null}
 
         {/* Sobre */}

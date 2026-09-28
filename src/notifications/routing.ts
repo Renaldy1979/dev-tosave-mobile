@@ -6,13 +6,17 @@ import type { Href } from "expo-router";
  * push (`data`) e no item da caixa (`/v2/notifications`), de propósito,
  * pra usar a mesma lógica nos dois casos.
  *
- * `"news"` é o único tipo por enquanto; mais tipos chegam no lote 3
- * (Clube da Troca).
+ * `"news"` (lote 1) e `"trade_match"`/`"trade_interest"` (lote 3, Clube
+ * da Troca) — mais tipos "admin_broadcast" (sem alvo) caem no `default`.
  */
 export function notificationRoute(type: string, targetId: string | null): Href | null {
+  if (!targetId) return null;
   switch (type) {
     case "news":
-      return targetId ? (`/noticia/${targetId}` as Href) : null;
+      return `/noticia/${targetId}` as Href;
+    case "trade_match":
+    case "trade_interest":
+      return `/anuncio/${targetId}` as Href;
     default:
       return null;
   }

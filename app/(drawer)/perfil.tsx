@@ -10,11 +10,13 @@ import {
   useRouter,
 } from "expo-router";
 import {
+  ArrowLeftRight,
   FileText,
   Info,
   Lock,
   LogOut,
   Moon,
+  Phone,
   RotateCcw,
   ShieldCheck,
   Smartphone,
@@ -31,6 +33,7 @@ import { useDelayedFlag } from "@/hooks/useDelayedFlag";
 import {
   changePassword,
   getCollectionSummary,
+  getMe,
   updateProfile,
 } from "@/services";
 import type { ChangePasswordError } from "@/services";
@@ -54,6 +57,7 @@ import { ProfileSkeleton } from "@/components/car/CarCardSkeleton";
 // LoginGate removido na fase 2 — app travado.
 import { useToast } from "@/components/ui/Toast";
 import { clearOnboardingSeen } from "@/utils/onboarding";
+import { PhoneSheet, formatPhone } from "@/components/trade/PhoneSheet";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -91,6 +95,8 @@ export default function Perfil() {
   const [editOpen, setEditOpen] = useState(false);
   const [signOutOpen, setSignOutOpen] = useState(false);
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
+  const [phone, setPhone] = useState<string | null>(null);
+  const [phoneSheetOpen, setPhoneSheetOpen] = useState(false);
 
   const loadSummary = useCallback(async () => {
     if (!user) {
@@ -107,9 +113,20 @@ export default function Perfil() {
     }
   }, [user]);
 
+  const loadPhone = useCallback(async () => {
+    if (!user) return;
+    try {
+      const me = await getMe();
+      setPhone(me.phone);
+    } catch {
+      // Não crítico — o ListRow mostra "Não cadastrado" e a edição tenta de novo.
+    }
+  }, [user]);
+
   useEffect(() => {
     void loadSummary();
-  }, [loadSummary]);
+    void loadPhone();
+  }, [loadSummary, loadPhone]);
 
   const handleReplayOnboarding = useCallback(async () => {
     // Limpa o flag e navega para o onboarding. A próxima abertura do
@@ -277,7 +294,14 @@ export default function Perfil() {
           </Text>
           <View className="rounded-lg bg-surface border border-border overflow-hidden">
             <ListRow icon={Heart} label="Minha coleção" onPress={() => router.push("/colecao")} />
+            <ListRow icon={ArrowLeftRight} label="Meus anúncios" onPress={() => router.push("/troca")} />
             <ListRow icon={Mail} label="E-mail" value={user.email} />
+            <ListRow
+              icon={Phone}
+              label="Telefone (WhatsApp)"
+              value={phone ? formatPhone(phone) : "Não cadastrado"}
+              onPress={() => setPhoneSheetOpen(true)}
+            />
             <ListRow
               icon={Lock}
               label="Alterar senha"
@@ -353,6 +377,17 @@ export default function Perfil() {
 
       {/* Sair: o mesmo diálogo do drawer (09-menu-drawer §2.4) */}
       <SignOutDialog open={signOutOpen} onClose={() => setSignOutOpen(false)} />
+
+      {/* BottomSheet "Telefone/WhatsApp" (lote 3, Clube da Troca) */}
+      <PhoneSheet
+        open={phoneSheetOpen}
+        onClose={() => setPhoneSheetOpen(false)}
+        currentPhone={phone}
+        onSaved={(next) => {
+          setPhone(next);
+          show({ type: "success", message: "Telefone atualizado." });
+        }}
+      />
 
       {/* BottomSheet "Alterar senha" (fase 2) */}
       <ChangePasswordSheet

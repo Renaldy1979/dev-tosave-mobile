@@ -24,7 +24,8 @@ type BadgeVariant =
   | "accent"
   | "flame"
   | "glass"
-  | "outline";
+  | "outline"
+  | "success";
 
 type Props = {
   variant?: BadgeVariant;
@@ -43,15 +44,17 @@ const variantClass: Record<BadgeVariant, string> = {
   flame: "bg-flame-soft",
   glass: "bg-black/50",
   outline: "border border-border bg-transparent",
+  success: "bg-success/15",
 };
 
-const variantTone: Record<BadgeVariant, "muted" | "primary" | "accent" | "flame" | "fg"> = {
+const variantTone: Record<BadgeVariant, "muted" | "primary" | "accent" | "flame" | "success" | "fg"> = {
   neutral: "muted",
   primary: "primary",
   accent: "accent",
   flame: "flame",
   glass: "fg",
   outline: "muted",
+  success: "success",
 };
 
 const variantTextClass: Record<BadgeVariant, string> = {
@@ -61,6 +64,7 @@ const variantTextClass: Record<BadgeVariant, string> = {
   flame: "text-flame",
   glass: "text-white",
   outline: "text-fg-muted",
+  success: "text-success",
 };
 
 export function Badge({

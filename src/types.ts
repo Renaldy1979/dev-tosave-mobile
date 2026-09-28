@@ -234,6 +234,36 @@ export interface NotificationItem {
   createdAt: string;
 }
 
+// ---------- Clube da Troca ----------
+
+export type TradeType = "TRADE" | "SALE";
+export type TradeStatus = "ACTIVE" | "COMPLETED" | "CANCELLED";
+
+/**
+ * Anúncio do Clube da Troca (`/v2/trade`). `price` só faz sentido em
+ * `SALE` (informativo — sem pagamento no app). O telefone do
+ * anunciante nunca vem aqui: só em `revealTradeContact`
+ * (`POST /v2/trade/:id/contact`), sob toque explícito ("Revelar
+ * contato"). A "vaga" da unidade ofertada não mexe na coleção — o
+ * backend só limita quantos anúncios `ACTIVE` do mesmo carro cabem na
+ * quantidade que o usuário tem.
+ */
+export interface TradeListing {
+  id: string;
+  car: CarListItem;
+  userId: string;
+  userName: string;
+  type: TradeType;
+  price: number | null;
+  description: string;
+  status: TradeStatus;
+  /** Carros que o anunciante deseja receber; [] quando `type` é `SALE`. */
+  desiredCars: CarListItem[];
+  /** O anunciante tem telefone cadastrado (mostra ou não "Revelar contato"). */
+  hasContact: boolean;
+  createdAt: string;
+}
+
 // ---------- Sessão de auth ----------
 
 /**

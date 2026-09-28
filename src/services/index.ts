@@ -94,3 +94,17 @@ export {
   unregisterPushToken,
 } from "./notifications";
 export type { PaginatedNotifications } from "./notifications";
+
+export {
+  cancelTradeListing,
+  completeTradeListing,
+  createTradeListing,
+  getTradeById,
+  listMyTradePaged,
+  listTradePaged,
+  revealTradeContact,
+} from "./trade";
+export type { CreateTradeInput, CreateTradeResult, PaginatedTrade } from "./trade";
+
+export { getMe, updateMyPhone } from "./me";
+export type { MeProfile } from "./me";

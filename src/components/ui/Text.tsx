@@ -32,6 +32,7 @@ export type TextTone =
   | "primary"
   | "accent"
   | "flame"
+  | "success"
   | "danger"
   | "ink";
 
@@ -57,6 +58,7 @@ const toneClasses: Record<TextTone, string> = {
   primary: "text-primary-text",
   accent: "text-accent",
   flame: "text-flame",
+  success: "text-success",
   danger: "text-danger",
   ink: "text-ink-fg",
 };

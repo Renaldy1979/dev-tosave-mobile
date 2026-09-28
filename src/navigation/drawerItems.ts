@@ -1,5 +1,6 @@
 import type { Href } from "expo-router";
 import {
+  ArrowLeftRight,
   Bell,
   ChartColumn,
   Heart,
@@ -45,6 +46,7 @@ export const DRAWER_ITEMS: DrawerItem[] = [
     icon: Bell,
     badge: getUnreadNotificationsSnapshot,
   },
+  { name: "troca", route: "/troca", label: "Clube da Troca", icon: ArrowLeftRight },
   { name: "estatisticas", route: "/estatisticas", label: "Estatísticas", icon: ChartColumn },
   { name: "perfil", route: "/perfil", label: "Perfil", icon: User },
 ];
