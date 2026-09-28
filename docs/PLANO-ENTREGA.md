@@ -62,7 +62,7 @@ Guia vivo: o Orquestrador atualiza este arquivo a cada lote entregue. As referê
   - caixa de notificações com badge;
   - o toque na notificação leva à tela certa.
 
-### Lote 3: Clube da Troca (em andamento desde 27/09)
+### Lote 3: Clube da Troca (entregue e validado em 28/09)
 - **Backend `/v2/trade`:**
   - anúncio de **troca ou venda** de um carro **da própria coleção**;
   - carros desejados;
@@ -77,7 +77,7 @@ Guia vivo: o Orquestrador atualiza este arquivo a cada lote entregue. As referê
 - **Referência de UX:** o front web antigo (`C:\Dev\frontEndToSaveWEB`, `trade/*`), com as correções do levantamento.
 - **Notificações do lote 2:** "novo anúncio que tem um carro que você deseja", "seu anúncio foi finalizado" e similares.
 
-### Lote 4: Dívidas e polimento
+### Lote 4: Dívidas e polimento (em andamento; handoff em docs/briefings/proximo-lote.md)
 - **Limpeza do legado (depois do lote 3):**
   - remover a coluna `users.expo_push_token` (tokens do app antigo, inúteis no app novo; a v2 usa `push_tokens`);
   - remover os módulos antigos `news`, `trade`, `notifications` e `garage` do `backendToSave`, e as tabelas `garages` e `garages_item`, se as garagens continuarem fora.
