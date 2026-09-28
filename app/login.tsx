@@ -64,7 +64,7 @@ export default function Login() {
   // Com sessão (deep link, ou sessão restaurada), vai para o app.
   useEffect(() => {
     if (user) {
-      router.replace("/(drawer)");
+      router.replace("/(tabs)");
     }
   }, [user, router]);
 
@@ -135,7 +135,7 @@ export default function Login() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
     show({ type: "success", message: "Bem-vindo de volta." });
     // O Login é a raiz do stack: `replace`, nunca `back`.
-    router.replace("/(drawer)");
+    router.replace("/(tabs)");
   }, [validate, signIn, email, password, router, show]);
 
   // Trava contra envio duplo: botão e "enviar" do teclado podem disparar

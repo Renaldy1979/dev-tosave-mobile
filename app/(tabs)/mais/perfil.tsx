@@ -145,7 +145,7 @@ export default function Perfil() {
   if (userState === "error") {
     return (
       <ScreenContainer bg="bg" edges={["bottom"]} className="bg-bg">
-        <Header variant="root" title="Perfil" />
+        <Header variant="stack" title="Perfil" backFallback="/mais" />
         <View className="flex-1 items-center justify-center px-8">
           <ErrorState
             title="Não foi possível carregar."
@@ -176,7 +176,7 @@ export default function Perfil() {
 
   return (
     <ScreenContainer bg="bg" edges={["bottom"]} className="bg-bg">
-      <Header variant="root" title="Perfil" />
+      <Header variant="stack" title="Perfil" backFallback="/mais" />
 
       <Animated.ScrollView
         showsVerticalScrollIndicator={false}
@@ -294,7 +294,7 @@ export default function Perfil() {
           </Text>
           <View className="rounded-lg bg-surface border border-border overflow-hidden">
             <ListRow icon={Heart} label="Minha coleção" onPress={() => router.push("/colecao")} />
-            <ListRow icon={ArrowLeftRight} label="Meus anúncios" onPress={() => router.push("/troca")} />
+            <ListRow icon={ArrowLeftRight} label="Meus anúncios" onPress={() => router.push("/mais/troca")} />
             <ListRow icon={Mail} label="E-mail" value={user.email} />
             <ListRow
               icon={Phone}

@@ -70,7 +70,7 @@ export default function RootLayout() {
                   <Stack.Screen name="login" options={{ animation: "fade", gestureEnabled: false }} />
                   <Stack.Screen name="cadastro" />
                   <Stack.Screen name="recuperar-senha" />
-                  <Stack.Screen name="(drawer)" />
+                  <Stack.Screen name="(tabs)" />
                   <Stack.Screen
                     name="car/[id]"
                     options={{
@@ -119,7 +119,7 @@ export default function RootLayout() {
 
 /**
  * AuthGate — redireciona para `/login` quando a sessão cai enquanto
- * o usuário está numa rota protegida ((drawer), car/[id], serie/[id],
+ * o usuário está numa rota protegida ((tabs), car/[id], serie/[id],
  * noticia/[id], anuncio/[id]|novo ou excluir-conta). O splash
  * (`app/index.tsx`) já cuida da entrada inicial; o cadasto
  * (`/cadastro`) também fica acessível sem sessão.
@@ -132,12 +132,12 @@ function AuthGate() {
   useEffect(() => {
     if (user) return;
     const top = segments[0];
-    // Rotas que exigem sessão: (drawer), detalhe do carro, tela da série,
+    // Rotas que exigem sessão: (tabs), detalhe do carro, tela da série,
     // detalhe da notícia e o Clube da Troca. `/login`, `/cadastro`,
     // `/onboarding` e `/` (splash) ficam acessíveis sem sessão para que
     // o usuário possa entrar ou criar conta.
     const protectedRoute =
-      top === "(drawer)" ||
+      top === "(tabs)" ||
       top === "car" ||
       top === "serie" ||
       top === "noticia" ||

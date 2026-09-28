@@ -73,7 +73,7 @@ export default function Busca() {
   }>();
   const insets = useSafeAreaInsets();
   const { c } = useTheme();
-  // `user` não é checado aqui — a Busca fica dentro do grupo (drawer),
+  // `user` não é checado aqui — a Busca fica dentro do grupo (tabs),
   // protegido pelo Stack, então user está sempre presente.
   const { show } = useToast();
   const grid = useGridLayout();

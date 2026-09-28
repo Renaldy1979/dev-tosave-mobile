@@ -33,7 +33,7 @@ const MAX_NAME = 60;
  *
  * Fluxo da fase 2 — app travado:
  * - sem sessão: renderiza o formulário;
- * - com sessão: redireciona para `/(drawer)` sem renderizar.
+ * - com sessão: redireciona para `/(tabs)` sem renderizar.
  *
  * Campos: Nome, E-mail, Senha. Sem confirmação de senha. Validação
  * local (mínimo 8 caracteres) + erro do servidor (`signUp` → `SignUpError`).
@@ -59,7 +59,7 @@ export default function Cadastro() {
   // Com sessão, volta direto para o app.
   useFocusEffect(
     useCallback(() => {
-      if (user) router.replace("/(drawer)");
+      if (user) router.replace("/(tabs)");
     }, [user, router])
   );
 
@@ -173,7 +173,7 @@ export default function Cadastro() {
 
     backSub.remove();
     setSubmitting(false);
-    router.replace("/(drawer)");
+    router.replace("/(tabs)");
   }, [
     validate,
     signUp,

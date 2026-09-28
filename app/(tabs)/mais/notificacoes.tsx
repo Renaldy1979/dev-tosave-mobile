@@ -16,6 +16,7 @@ import {
 import { useDelayedFlag } from "@/hooks/useDelayedFlag";
 import { ScreenContainer } from "@/components/ui/ScreenContainer";
 import { Header } from "@/components/ui/Header";
+import { IconButton } from "@/components/ui/IconButton";
 import { Text } from "@/components/ui/Text";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -159,12 +160,13 @@ export default function Notificacoes() {
   return (
     <ScreenContainer bg="bg" edges={["bottom"]} className="bg-bg">
       <Header
-        variant="root"
+        variant="stack"
         title="Notificações"
-        action={
-          unreadCount > 0
-            ? { icon: CheckCheck, accessibilityLabel: "Marcar todas como lidas", onPress: handleMarkAll }
-            : undefined
+        backFallback="/mais"
+        right={
+          unreadCount > 0 ? (
+            <IconButton icon={CheckCheck} accessibilityLabel="Marcar todas como lidas" onPress={handleMarkAll} />
+          ) : undefined
         }
       />
       <FlashList

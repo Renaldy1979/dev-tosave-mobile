@@ -163,12 +163,12 @@ export default function SerieScreen() {
   if (loadState === "not-found") {
     return (
       <ScreenContainer bg="bg" edges={["bottom"]} className="bg-bg">
-        <Header variant="stack" title="Série" backFallback="/series" />
+        <Header variant="stack" title="Série" backFallback="/mais/series" />
         <View className="flex-1 items-center justify-center px-8">
           <EmptyState
             kind="no-content"
             size="lg"
-            action={{ label: "Ver todas as séries", onPress: () => router.replace("/series") }}
+            action={{ label: "Ver todas as séries", onPress: () => router.replace("/mais/series") }}
           />
         </View>
       </ScreenContainer>
@@ -178,7 +178,7 @@ export default function SerieScreen() {
   if (loadState === "error") {
     return (
       <ScreenContainer bg="bg" edges={["bottom"]} className="bg-bg">
-        <Header variant="stack" title="Série" backFallback="/series" />
+        <Header variant="stack" title="Série" backFallback="/mais/series" />
         <View className="flex-1 items-center justify-center px-8">
           <ErrorState onRetry={() => load("initial")} />
         </View>
@@ -189,7 +189,7 @@ export default function SerieScreen() {
   if (loadState === "loading" || !serie) {
     return (
       <ScreenContainer bg="bg" edges={["bottom"]} className="bg-bg">
-        <Header variant="stack" title="Série" backFallback="/series" />
+        <Header variant="stack" title="Série" backFallback="/mais/series" />
         {showSkeleton ? (
           <View>
             <View className="items-center px-4 pt-6 pb-4 gap-3">
@@ -307,7 +307,7 @@ export default function SerieScreen() {
 
   return (
     <ScreenContainer bg="bg" edges={["bottom"]} className="bg-bg">
-      <Header variant="stack" title={serie.title} backFallback="/series" />
+      <Header variant="stack" title={serie.title} backFallback="/mais/series" />
       <FlashList
         data={listLoading ? [] : cars}
         numColumns={grid.columns}

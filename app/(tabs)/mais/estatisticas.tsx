@@ -291,7 +291,7 @@ export default function Estatisticas() {
             <Pressable
               accessibilityRole="link"
               accessibilityLabel="Ver todas as séries"
-              onPress={() => router.navigate("/series")}
+              onPress={() => router.navigate("/mais/series")}
               hitSlop={8}
               className="flex-row items-center gap-1 active:opacity-70"
               style={{ minHeight: 44 }}
@@ -353,7 +353,7 @@ export default function Estatisticas() {
 
   return (
     <ScreenContainer bg="bg" edges={["bottom"]} className="bg-bg">
-      <Header variant="root" title="Estatísticas" />
+      <Header variant="stack" title="Estatísticas" backFallback="/mais" />
       {allFailed ? (
         <View className="flex-1 items-center justify-center px-8">
           <ErrorState onRetry={loadAll} />

@@ -51,7 +51,7 @@ export default function ExcluirConta() {
 
   const goBack = useCallback(() => {
     if (router.canGoBack()) router.back();
-    else router.replace("/perfil");
+    else router.replace("/mais/perfil");
   }, [router]);
 
   const doSubmit = useCallback(async () => {
@@ -97,7 +97,7 @@ export default function ExcluirConta() {
   return (
     <ScreenContainer bg="bg" edges={["bottom"]} className="bg-bg">
       <Stack.Screen options={{ gestureEnabled: !submitting }} />
-      <Header variant="stack" title="Excluir conta" back={!submitting} backFallback="/perfil" />
+      <Header variant="stack" title="Excluir conta" back={!submitting} backFallback="/mais/perfil" />
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} className="flex-1">
         <ScrollView
           keyboardShouldPersistTaps="handled"

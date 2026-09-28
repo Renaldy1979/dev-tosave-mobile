@@ -20,7 +20,8 @@ import { RootHeader, type RootHeaderAction } from "@/components/navigation/RootH
  * Header (componentes.md §7).
  *
  * Variantes:
- * - `root`        → telas raiz do drawer (`09-menu-drawer.md` §1): `≡`,
+ * - `root`        → telas raiz da barra inferior (`docs/briefings/
+ *                   navegacao-mais.md`): sino de notificações,
  *                   título (ou Logo com `logo`) e até 1 `action`; `ink`
  *                   na Home. Fixo, não colapsa.
  * - `stack`       → `bg-surface` + borda, voltar à esquerda, título
@@ -74,7 +75,7 @@ export function Header({
   logo,
   ink,
   action,
-  backFallback = "/(drawer)",
+  backFallback = "/(tabs)",
 }: Props) {
   const insets = useSafeAreaInsets();
   const { c } = useTheme();

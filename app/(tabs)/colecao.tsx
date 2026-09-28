@@ -261,7 +261,7 @@ export default function Colecao() {
             <Pressable
               accessibilityRole="link"
               accessibilityLabel="Ver estatísticas"
-              onPress={() => router.navigate("/estatisticas")}
+              onPress={() => router.navigate("/mais/estatisticas")}
               hitSlop={8}
               className="flex-row items-center gap-1 active:opacity-70"
               style={{ minHeight: 44 }}

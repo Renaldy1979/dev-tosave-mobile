@@ -4,8 +4,9 @@ import { getUnreadNotificationsCount } from "@/services/notifications";
 /**
  * Contagem de não lidas — **store de módulo compartilhado** (mesmo
  * padrão de `useCurrentUser`), lida via `useSyncExternalStore`. Não
- * precisa de Provider: o sino da Home e o item do drawer leem o mesmo
- * valor, e a tela da caixa ajusta otimista ao marcar como lida.
+ * precisa de Provider: o sino do cabeçalho e o item "Notificações" da
+ * tela Mais leem o mesmo valor, e a tela da caixa ajusta otimista ao
+ * marcar como lida.
  */
 
 type Listener = () => void;
@@ -23,7 +24,7 @@ function subscribe(listener: Listener) {
   };
 }
 
-/** Valor atual, para uso fora de componentes (`DrawerItem.badge`). */
+/** Valor atual, para uso fora de componentes (`NavItem.badge`). */
 export function getUnreadNotificationsSnapshot(): number {
   return unreadCount;
 }
@@ -53,7 +54,7 @@ export function clearUnreadNotifications() {
   setUnreadCount(0);
 }
 
-/** Contagem de não lidas, reativa (sino da Home, item do drawer). */
+/** Contagem de não lidas, reativa (sino do cabeçalho, item da tela Mais). */
 export function useUnreadNotificationsCount(): number {
   return useSyncExternalStore(subscribe, getUnreadNotificationsSnapshot, getUnreadNotificationsSnapshot);
 }

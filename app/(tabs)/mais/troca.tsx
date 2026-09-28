@@ -11,6 +11,7 @@ import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useDelayedFlag } from "@/hooks/useDelayedFlag";
 import { ScreenContainer } from "@/components/ui/ScreenContainer";
 import { Header } from "@/components/ui/Header";
+import { IconButton } from "@/components/ui/IconButton";
 import { SearchBar } from "@/components/ui/SearchBar";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Text } from "@/components/ui/Text";
@@ -36,9 +37,12 @@ export default function ClubeDaTroca() {
   return (
     <ScreenContainer bg="bg" edges={["bottom"]} className="bg-bg">
       <Header
-        variant="root"
+        variant="stack"
         title="Clube da Troca"
-        action={{ icon: Plus, accessibilityLabel: "Anunciar", onPress: () => router.push("/anuncio/novo") }}
+        backFallback="/mais"
+        right={
+          <IconButton icon={Plus} accessibilityLabel="Anunciar" onPress={() => router.push("/anuncio/novo")} />
+        }
       />
       <View className="px-4 pt-3 pb-1">
         <SegmentedControl

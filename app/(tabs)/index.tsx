@@ -2,13 +2,13 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, View } from "react-native";
 import { FlashList } from "@shopify/flash-list";
 import { useRouter } from "expo-router";
-import { Bell, ChevronRight, Search } from "lucide-react-native";
+import { ChevronRight, Search } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/theme/ThemeProvider";
 import { listCarsPaged, listLatestNews, listSeries } from "@/services";
 import type { CarListItem, NewsItem, Serie } from "@/types";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { refreshUnreadNotifications, useUnreadNotificationsCount } from "@/hooks/useNotifications";
+import { refreshUnreadNotifications } from "@/hooks/useNotifications";
 import { useDelayedFlag } from "@/hooks/useDelayedFlag";
 import { useGridLayout } from "@/hooks/useGridColumns";
 import { useCollectionStore } from "@/hooks/useCollectionStore";
@@ -46,7 +46,6 @@ export default function Home() {
   const router = useRouter();
   const { user, refresh: refreshUser } = useCurrentUser();
   const collection = useCollectionStore();
-  const unreadCount = useUnreadNotificationsCount();
   const { show } = useToast();
   const grid = useGridLayout();
   // Sem TabBar: só a safe area inferior + respiro.
@@ -170,19 +169,11 @@ export default function Home() {
         variant="root"
         ink
         logo
-        action={[
-          {
-            icon: Search,
-            accessibilityLabel: "Buscar miniaturas",
-            onPress: () => router.navigate("/busca?focus=1"),
-          },
-          {
-            icon: Bell,
-            accessibilityLabel: "Notificações",
-            badge: unreadCount,
-            onPress: () => router.push("/notificacoes"),
-          },
-        ]}
+        action={{
+          icon: Search,
+          accessibilityLabel: "Buscar miniaturas",
+          onPress: () => router.navigate("/busca?focus=1"),
+        }}
       />
       <FlashList
         data={data}
@@ -220,7 +211,7 @@ export default function Home() {
             onRetrySeries={loadSeries}
             onSearchPress={() => router.push("/busca?focus=1")}
             onSeriesPress={(id) => router.push(`/serie/${id}`)}
-            onAllSeriesPress={() => router.navigate("/series")}
+            onAllSeriesPress={() => router.navigate("/mais/series")}
             collectionCount={collectionCount}
             showSeriesSkeleton={showSeriesSkeleton}
             newsState={newsState}

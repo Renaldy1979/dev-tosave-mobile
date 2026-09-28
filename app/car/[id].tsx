@@ -193,7 +193,7 @@ export default function CarDetalhe() {
           <EmptyState
             kind="no-cars"
             description="Esse carro pode ter sido removido do catálogo."
-            action={{ label: "Voltar ao início", onPress: () => router.replace("/(drawer)") }}
+            action={{ label: "Voltar ao início", onPress: () => router.replace("/(tabs)") }}
           />
         </View>
       </ScreenContainer>

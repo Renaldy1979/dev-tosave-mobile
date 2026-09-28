@@ -6,7 +6,7 @@ import { formatDateShort } from "@/utils/formatDate";
 
 /**
  * Card de notícia: imagem 88×88, título, data e resumo. Usado no feed
- * (`app/(drawer)/noticias.tsx`) e na seção "Últimas notícias" da Home.
+ * (`app/(tabs)/noticias.tsx`) e na seção "Últimas notícias" da Home.
  */
 type Props = {
   title: string;

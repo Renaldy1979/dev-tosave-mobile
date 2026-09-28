@@ -173,7 +173,7 @@ export default function Series() {
 
   return (
     <ScreenContainer bg="bg" edges={["bottom"]} className="bg-bg">
-      <Header variant="root" title="Séries" />
+      <Header variant="stack" title="Séries" backFallback="/mais" />
       <FlashList
         data={state === "ok" ? items : []}
         keyExtractor={(item) => item.id}

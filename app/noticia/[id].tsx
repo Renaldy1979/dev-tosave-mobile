@@ -75,7 +75,7 @@ export default function NoticiaDetalhe() {
           <EmptyState
             kind="no-content"
             description="Essa notícia pode ter sido despublicada ou removida."
-            action={{ label: "Voltar", onPress: () => router.replace("/(drawer)/noticias") }}
+            action={{ label: "Voltar", onPress: () => router.replace("/noticias") }}
           />
         </View>
       </ScreenContainer>

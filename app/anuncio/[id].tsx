@@ -126,7 +126,7 @@ export default function AnuncioDetalhe() {
           <EmptyState
             kind="no-content"
             description="Esse anúncio pode ter sido removido."
-            action={{ label: "Voltar ao Clube da Troca", onPress: () => router.replace("/(drawer)/troca") }}
+            action={{ label: "Voltar ao Clube da Troca", onPress: () => router.replace("/mais/troca") }}
           />
         </View>
       </ScreenContainer>
