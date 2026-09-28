@@ -18,7 +18,7 @@ export async function getMe(): Promise<MeProfile> {
   return api<MeProfile>("/v2/me");
 }
 
-/** `phone: null` limpa o telefone cadastrado. */
-export async function updateMyPhone(phone: string | null): Promise<MeProfile> {
-  return api<MeProfile>("/v2/me", { method: "PUT", body: { phone } });
+/** `phone: null` limpa o telefone cadastrado. Resposta: só `{ phone }`. */
+export async function updateMyPhone(phone: string | null): Promise<{ phone: string | null }> {
+  return api<{ phone: string | null }>("/v2/me", { method: "PUT", body: { phone } });
 }
